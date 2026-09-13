@@ -30,15 +30,17 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] **Slice 2 — LLM provider abstraction** (`apps/agent-service/app/llm/`)
 - [x] **Slice 1 — Core entities + seed script + Company Pulse page**
 - [x] **Slice 3 — Event system + Observer agent**
-- [x] **Slice 4 — State Agent + deterministic trajectory math**:
-  - `apps/agent-service/app/trajectory.py`: Pure, deterministic functions (`compute_runway`, `compute_burn_delta`, `compute_goal_progress`) adhering strictly to DECISIONS.md (no LLM math).
-  - `apps/agent-service/app/state_agent.py`: `StateAgent` implementation computing exact new metrics and invoking the LLM provider for narrative generation.
-  - `apps/agent-service/app/main.py`: Exposed `POST /state/process` endpoint.
-  - `apps/agent-service/tests/test_trajectory.py` & `tests/test_state_agent.py`: Unit tests for deterministic math and state narration (20 passed).
-  - `apps/web/app/api/state/update/route.ts`: Internal API endpoint for persisting trajectory snapshots, runway snapshots, and updated goal progress to Postgres.
+- [x] **Slice 4 — State Agent + deterministic trajectory math**
+- [x] **Slice 5 — Authority model + permission gate + audit log**:
+  - `apps/agent-service/app/permission_gate.py`: `check_permission` function evaluating org policy table hierarchy (`READ`, `DRAFT`, `RECOMMEND`, `EXECUTE`, `REQUIRE_APPROVAL`).
+  - `apps/agent-service/tests/test_permission_gate.py`: Unit tests verifying permission evaluations.
+  - `apps/web/app/api/audit/route.ts`: API endpoints for fetching (`GET`) and writing (`POST`) `AuditLogEntry` records.
+  - `apps/web/app/api/permissions/route.ts`: API endpoints for managing org policy settings.
+  - `apps/web/app/audit/page.tsx`: Agent Activity & Audit Log UI page.
+  - `apps/web/app/settings/permissions/page.tsx`: Settings / Permissions configuration UI page.
 
 ### In progress
-- [ ] Authority model + permission gate + audit log (Slice 5)
+- [ ] Strategist + Operator agents, Tasks, and approvals UI (Slice 6)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable
