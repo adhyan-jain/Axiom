@@ -91,15 +91,19 @@ fail-closed. This entry documents what actually got wired, verified live, end to
 
 ### Known gaps / deliberately left as-is (documented, not silently skipped)
 
-- **`apps/web/components/DemoControls.tsx`** (and any other client component that would
-  `fetch("/api/...")` directly) sends **no** `X-Axiom-Internal-Secret` header — it never
-  did, even before this pass. Under the fail-closed fix, clicking the Step 1/2/3 buttons in
-  the browser will now correctly 401 rather than silently no-op or (pre-fix) fall through
-  on an unset secret. This wasn't in scope to fix here since the assignment's own
-  verification path is `curl` with an explicit header, and fixing it properly means
-  converting `DemoControls` to Server Actions the same way `ProcessEventButton` was done —
-  left as a follow-up. **The backend logic is real and verified via curl; the demo button
-  in the browser needs the same Server Action treatment before it'll work by click.**
+- ~~`apps/web/components/DemoControls.tsx` sends no auth header~~ **Fixed (2026-09-13,
+  follow-up pass).** The three step functions were extracted from `app/api/demo/run/route.ts`
+  into `apps/web/lib/demoSteps.ts`, shared by both the HTTP route (still secret-gated, for
+  curl/service callers) and a new Server Action `apps/web/app/demo-actions.ts`
+  (`runDemoStepAction`), which `DemoControls.tsx` now calls directly instead of
+  `fetch("/api/demo/run")` — same pattern as `ProcessEventButton`/`processEventAction`.
+  **Verified live**: invoked the compiled action directly via its Next.js action-id hash
+  (`curl -H "Next-Action: <hash>" -d '[1]' http://localhost:3000/`, i.e. exactly what the
+  browser button does — no `X-Axiom-Internal-Secret` sent) for all three steps; each
+  returned `"ok":true` with real ids, and the resulting `AuditLogEntry` rows showed the same
+  genuine agent/tool/result variety as the curl-verified HTTP path (`create_invoice`
+  correctly `blocked` pending approval both times). `typecheck`/`build`/`lint` all stayed
+  clean after the extraction.
 - **`OperatorAgent.propose_actions`** always gates every proposal against
   `PermissionLevel.EXECUTE` regardless of what the action conceptually needs (pre-existing,
   not introduced here) — so even a plain `create_task` proposal at `RECOMMEND` policy shows

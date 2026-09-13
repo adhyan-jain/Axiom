@@ -1,26 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { runDemoStepAction } from "@/app/demo-actions";
 
 export default function DemoControls() {
   const [loadingStep, setLoadingStep] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const runStep = async (step: number) => {
+  const runStep = async (step: 1 | 2 | 3) => {
     setLoadingStep(step);
     setMessage(null);
     try {
-      const res = await fetch("/api/demo/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ step }),
-      });
-      const data = await res.json();
+      const res = await runDemoStepAction(step);
       if (res.ok) {
         setMessage(`Step ${step} executed successfully! Reloading...`);
         setTimeout(() => window.location.reload(), 1200);
       } else {
-        setMessage(`Error: ${data.error}`);
+        setMessage(`Error: ${res.error}`);
       }
     } catch (e: any) {
       setMessage(`Failed: ${e.message}`);
