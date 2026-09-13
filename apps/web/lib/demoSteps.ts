@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { persistProposedAction } from "@/lib/actionPersistence";
+import { persistProposedAction, DEFAULT_STATE_VERSION } from "@/lib/actionPersistence";
 import { checkPermission } from "@/lib/permissionGate";
 import {
   observerProcess,
@@ -157,7 +157,7 @@ export async function runStep1Nimbus(orgId: string) {
       data: {
         orgId,
         toolInvocation: { tool: "create_invoice", args: { contractId: contract.id, customerId, amount: 20000000 } },
-        stateVersion: "v1.0.0",
+        stateVersion: DEFAULT_STATE_VERSION,
         status: "PENDING",
         reason: invoiceGate.reason ?? "Invoice creation requires approval per policy table",
       },

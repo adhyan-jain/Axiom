@@ -7,7 +7,14 @@
  * denial or a straight execution.
  */
 import "server-only";
+import { Prisma, TaskPriority } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+
+export const DEFAULT_STATE_VERSION = "v1.0.0";
+
+function toTaskPriority(priority: string | undefined): TaskPriority {
+  return priority && priority in TaskPriority ? (priority as TaskPriority) : TaskPriority.MEDIUM;
+}
 
 export type ProposedAction = {
   orgId: string;
@@ -15,7 +22,7 @@ export type ProposedAction = {
   why?: string | null;
   impact?: string | null;
   source?: string | null;
-  priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT" | string;
+  priority?: TaskPriority | string;
   toolInvocation?: Record<string, unknown>;
   requiresApproval: boolean;
   reason?: string | null;
@@ -36,8 +43,11 @@ export async function persistProposedAction(
     const approval = await prisma.approvalRequest.create({
       data: {
         orgId: proposal.orgId,
-        toolInvocation: (proposal.toolInvocation ?? { title: proposal.title, why: proposal.why }) as any,
-        stateVersion: proposal.stateVersion ?? "v1.0.0",
+        toolInvocation: (proposal.toolInvocation ?? {
+          title: proposal.title,
+          why: proposal.why,
+        }) as Prisma.InputJsonValue,
+        stateVersion: proposal.stateVersion ?? DEFAULT_STATE_VERSION,
         status: "PENDING",
         reason: proposal.reason ?? "Requires approval per policy table",
       },
@@ -52,7 +62,7 @@ export async function persistProposedAction(
       why: proposal.why || "Proposed by Operator agent",
       impact: proposal.impact || null,
       source: proposal.source || "operator_agent",
-      priority: (proposal.priority as any) || "MEDIUM",
+      priority: toTaskPriority(proposal.priority),
       status: "OPEN",
     },
   });
