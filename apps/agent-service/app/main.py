@@ -146,4 +146,39 @@ async def operator_propose(body: OperatorRequest) -> list[dict[str, Any]]:
     return await agent.propose_actions(bottleneck_obj, body.policy_table)
 
 
+class VerifyRequest(BaseModel):
+    expected: dict[str, Any]
+    actual: dict[str, Any]
+
+
+@app.post(
+    "/verifier/verify",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def verifier_verify(body: VerifyRequest) -> dict[str, Any]:
+    """Slice 7: Verifier agent endpoint."""
+    from app.verifier_memory import VerifierAgent
+    agent = VerifierAgent()
+    res = await agent.verify_state_change(body.expected, body.actual)
+    return res.model_dump()
+
+
+class MemoryConflictRequest(BaseModel):
+    event: dict[str, Any]
+    active_decisions: list[dict[str, Any]]
+
+
+@app.post(
+    "/memory/check-conflict",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def memory_check_conflict(body: MemoryConflictRequest) -> dict[str, Any]:
+    """Slice 7: Memory agent conflict check endpoint."""
+    from app.verifier_memory import MemoryAgent
+    agent = MemoryAgent()
+    res = await agent.check_event_conflict(body.event, body.active_decisions)
+    return res.model_dump()
+
+
+
 

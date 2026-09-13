@@ -32,15 +32,16 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] **Slice 3 — Event system + Observer agent**
 - [x] **Slice 4 — State Agent + deterministic trajectory math**
 - [x] **Slice 5 — Authority model + permission gate + audit log**
-- [x] **Slice 6 — Strategist + Operator agents, Tasks, and approvals UI**:
-  - `apps/agent-service/app/strategist_operator.py`: `StrategistAgent` (trajectory/bottleneck analysis) and `OperatorAgent` (gated task/action proposals).
-  - `apps/agent-service/app/main.py`: Exposed `POST /strategist/analyze` and `POST /operator/propose` endpoints.
-  - `apps/agent-service/tests/test_strategist_operator.py`: Unit test suite (23 tests passing).
-  - `apps/web/app/api/actions/route.ts`: API endpoints for fetching and creating tasks or approval requests.
-  - `apps/web/app/actions/page.tsx`: Proactive Actions & Approvals UI screen showing pending approval requests and task queue.
+- [x] **Slice 6 — Strategist + Operator agents, Tasks, and approvals UI**
+- [x] **Slice 7 — Verifier + Memory Agent + Decisions/Memory UI**:
+  - `apps/agent-service/app/verifier_memory.py`: `VerifierAgent` (independent post-execution re-reads) and `MemoryAgent` (checking events against decision records for policy conflicts).
+  - `apps/agent-service/app/main.py`: Exposed `POST /verifier/verify` and `POST /memory/check-conflict` endpoints.
+  - `apps/agent-service/tests/test_verifier_memory.py`: Unit test suite (24 tests passing).
+  - `apps/web/app/api/decisions/route.ts`: API endpoints for fetching and creating `Decision` records.
+  - `apps/web/app/decisions/page.tsx`: Organizational Memory & Decisions UI screen listing decisions and flagged conflicts.
 
 ### In progress
-- [ ] Verifier + Memory Agent + Decisions/Memory UI (Slice 7)
+- [ ] Connectors (seeded) for Gmail/Slack/Calendar/Drive/GitHub (Slice 8)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable
