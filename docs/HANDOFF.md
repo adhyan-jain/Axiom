@@ -28,16 +28,16 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] `docs/SLICES.md` — slice-by-slice build plan (Slices 0-10), for reference each session.
 - [x] **Slice 0 — monorepo scaffold + round trip**
 - [x] **Slice 2 — LLM provider abstraction** (`apps/agent-service/app/llm/`)
-- [x] **Slice 1 — Core entities + seed script + Company Pulse page**:
-  - Postgres container running via Docker Compose on port 5433.
-  - Complete schema moved from draft into `apps/web/prisma/schema.prisma` and applied via `prisma db push`.
-  - Prisma client generated and helper singleton created in `apps/web/lib/prisma.ts`.
-  - Seed script `apps/web/prisma/seed.ts` created and executed (`pnpm --filter web db:seed`), populating Kestrel Labs org, founder Aarav Mehta, goals, customers, contracts, subscriptions, expenses, past decisions, integrations, starter permissions, and tasks.
-  - `apps/web/app/page.tsx` updated to render real live seeded data (ARR goal progress, runway months, monthly burn, open tasks, active memory/decisions) alongside the agent-service health status.
+- [x] **Slice 1 — Core entities + seed script + Company Pulse page**
+- [x] **Slice 3 — Event system + Observer agent**:
+  - `apps/web/app/api/events/route.ts` & `apps/web/app/api/events/[id]/route.ts`: Next.js internal API endpoints for fetching (`GET`), logging (`POST`), and updating (`PATCH`) events with `X-Axiom-Internal-Secret` protection.
+  - `apps/agent-service/app/observer.py`: `ObserverAgent` implementation that receives incoming event payloads and uses the active LLM provider to return structured `EventClassification` objects (significance, summary, recommended actions, flagged anomalies).
+  - `apps/agent-service/app/main.py`: `POST /observer/process` endpoint exposing the Observer agent.
+  - `apps/agent-service/tests/test_observer.py`: Unit test verifying `ObserverAgent` event classification.
+  - `apps/web/app/events/page.tsx`: "Inbox / Events Stream" UI screen rendering logged events, processing statuses, payloads, and evidence.
 
 ### In progress
-- [ ] Event system + Observer agent (Slice 3)
-- [ ] State Agent + trajectory math (Slice 4)
+- [ ] State Agent + deterministic trajectory math (Slice 4)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable

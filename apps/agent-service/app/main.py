@@ -73,3 +73,20 @@ async def llm_complete(body: LLMCompleteRequest) -> LLMCompleteResponse:
         provider=result.provider,
         model=result.model,
     )
+
+
+class ProcessEventRequest(BaseModel):
+    event: dict[str, Any]
+
+
+@app.post(
+    "/observer/process",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def process_event(body: ProcessEventRequest) -> dict[str, Any]:
+    """Slice 3: Observer agent endpoint that classifies an event's significance and recommended actions."""
+    from app.observer import ObserverAgent
+    agent = ObserverAgent()
+    classification = await agent.classify_event(body.event)
+    return classification.model_dump()
+
