@@ -1,82 +1,41 @@
 import { prisma } from "@/lib/prisma";
+import { Surface } from "@/components/primitives";
+import ScenarioCard from "@/components/ScenarioCard";
 
 export const revalidate = 0;
 
 export default async function ScenariosPage() {
-  const scenarios = await prisma.scenario.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+  const [scenarios, org] = await Promise.all([
+    prisma.scenario.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.organization.findFirst({
+      include: { runwaySnapshots: { orderBy: { computedAt: "desc" }, take: 1 } },
+    }),
+  ]);
+
+  const currentRunwayMonths = org?.runwaySnapshots[0]?.runwayMonths ?? null;
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 space-y-6">
-      <div className="flex items-center justify-between border-b pb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Counterfactual Scenario Engine
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Natural-language counterfactual scenario analysis grounded in deterministic financial trajectory math
-          </p>
+    <main className="mx-auto min-h-screen max-w-5xl space-y-8 px-6 py-10">
+      <div className="border-b border-hairline pb-6">
+        <h1 className="display-heading text-display-lg text-ink-primary">Strategy simulation</h1>
+        <p className="mt-1 text-body-sm text-ink-secondary">
+          Today vs. each option&apos;s runway/growth/risk deltas, with a recommendation and its
+          trigger condition — grounded in deterministic financial math, narrated by the LLM
+        </p>
+      </div>
+
+      {scenarios.length === 0 ? (
+        <Surface tier={1} className="p-8 text-center text-body-sm text-ink-faint">
+          No scenarios evaluated yet. Use the command bar to ask something like &quot;Should I
+          hire a developer next month?&quot;
+        </Surface>
+      ) : (
+        <div className="space-y-6">
+          {scenarios.map((scenario) => (
+            <ScenarioCard key={scenario.id} scenario={scenario} currentRunwayMonths={currentRunwayMonths} />
+          ))}
         </div>
-      </div>
-
-      <div className="space-y-6">
-        {scenarios.length === 0 ? (
-          <div className="p-8 text-center border rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-500">
-            No counterfactual scenarios evaluated yet. Use the command bar to evaluate a scenario.
-          </div>
-        ) : (
-          scenarios.map((s) => {
-            const options = Array.isArray(s.options) ? s.options : [];
-            return (
-              <div
-                key={s.id}
-                className="p-6 border rounded-xl bg-card text-card-foreground shadow-sm space-y-4"
-              >
-                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                  Question: &quot;{s.question}&quot;
-                </h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {options.map((opt: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-900/50 space-y-2 text-xs"
-                    >
-                      <span className="font-semibold text-sm text-indigo-600 dark:text-indigo-400 block">
-                        {opt.label}
-                      </span>
-                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                        <span>Projected Runway:</span>
-                        <span className="font-bold">{opt.projected_runway_months} months</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                        <span>Runway Delta:</span>
-                        <span
-                          className={`font-bold ${
-                            opt.runway_delta_months < 0 ? "text-red-500" : "text-emerald-500"
-                          }`}
-                        >
-                          {opt.runway_delta_months} months
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-4 border border-indigo-500/20 bg-indigo-500/5 rounded-lg space-y-1">
-                  <span className="font-semibold text-xs text-indigo-600 dark:text-indigo-400 block">
-                    LLM Recommendation & Trigger Condition:
-                  </span>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    {s.recommendation}
-                  </p>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+      )}
     </main>
   );
 }
