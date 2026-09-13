@@ -654,6 +654,17 @@ model Integration {
   status    IntegrationStatus   @default(CONNECTED)
   lastSyncAt DateTime?
 
+  // Live OAuth (Slice: real OAuth flow). Tokens are encrypted at rest (AES-256-GCM,
+  // key from INTEGRATION_TOKEN_KEY env var — see lib/integrationCrypto.ts) — never stored
+  // or logged in plaintext. Null until a real Connect flow completes; a SEEDED-mode row
+  // never populates these.
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+  scope           String?
+  externalAccountId String?
+  lastError       String? // last OAuth/callback failure reason, surfaced in the UI
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
