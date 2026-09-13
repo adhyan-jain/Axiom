@@ -26,83 +26,25 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] `docs/SDD.md` — authoritative spec for this build pass.
 - [x] `docs/HANDOFF.md` — this file.
 - [x] `docs/SLICES.md` — slice-by-slice build plan (Slices 0-10), for reference each session.
-- [x] **Slice 0 — monorepo scaffold + round trip**:
-  - pnpm workspace: `apps/web` (Next.js 14 App Router + TS + Tailwind),
-    `apps/agent-service` (Python FastAPI, `uv`-managed with a `requirements.txt` fallback),
-    `packages/shared-types` (scaffolded, placeholder type only).
-  - `apps/web`'s `/` page ("Hello Company") server-fetches `apps/agent-service`'s
-    `GET /health` and renders live status (ok / unreachable), via
-    `apps/web/lib/agentServiceClient.ts`.
-  - Shared-secret internal-auth convention established for all future web<->agent-service
-    calls: header `X-Axiom-Internal-Secret`, sent by `agentServiceFetch()` in
-    `apps/web/lib/agentServiceClient.ts`, validated by the `require_internal_secret`
-    FastAPI dependency in `apps/agent-service/app/auth.py`. Env vars:
-    `AGENT_SERVICE_URL`, `AGENT_SERVICE_SHARED_SECRET` (see root `.env.example`).
-  - `docker-compose.yml` at repo root: Postgres 16 + Redis 7, available but not wired into
-    either app yet (starts Slice 1).
-  - Root `package.json` workspace scripts (`dev`, `build`, `typecheck`, `lint` →
-    `apps/web`; `agent-service:dev` → `apps/agent-service/run.sh`).
-  - Root `.gitignore`, `README.md`, `.env.example` (documents all env vars introduced so
-    far, plus placeholders for `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `AWS_*`).
-  - git initialized, first commit made: `feat: scaffold monorepo (slice 0)`.
-
-- [x] **Slice 2 — LLM provider abstraction** (`apps/agent-service/app/llm/`):
-  - `base.py`: `LLMProvider` ABC — `complete(prompt, schema=None, **kwargs) ->
-    CompletionResult` (Pydantic-validated `structured` field, never free-text parsing, per
-    SDD §22), plus `register_before_tool_call()` hook-registration surface for Slice 5.
-  - `mock.py`: `MockProvider` — deterministic (sha256-of-prompt-seeded), zero network calls
-    (test asserts this by breaking `socket.socket` and confirming it still works).
-  - `anthropic_provider.py`: `AnthropicProvider` — real Anthropic Messages API calls;
-    structured output via a forced tool-use call validated back through the Pydantic
-    schema (not regex/substring parsing).
-  - `bedrock_strands.py`: `BedrockStrandsProvider` — real `strands-agents` `Agent` wired to
-    `strands.models.bedrock.BedrockModel`; genuinely inert without AWS creds (construction
-    never raises; `complete()` raises typed `ProviderNotConfiguredError`, verified via
-    both a pytest test and a live `/llm/complete` HTTP call with `LLM_PROVIDER=
-    bedrock_strands` forced and no AWS creds present — got a clean 503, not a crash).
-    Exposes `register_before_tool_call()`, which attaches a real
-    `strands.interventions.InterventionHandler.before_tool_call` override at completion
-    time (via a small `BedrockStrandsInterventionAdapter` bridge — Strands only detects
-    class-level overrides, not instance-assigned callables) — this is the literal
-    attachment point Slice 5's permission gate will use.
-  - `config.py`: `resolve_provider_name()` / `build_provider()` / `get_provider()` — env
-    var `LLM_PROVIDER` wins if set, else auto-detect bedrock_strands (AWS creds present) ->
-    anthropic (`ANTHROPIC_API_KEY` present) -> mock.
-  - `schemas.py`: small named-schema registry (`echo`, `sentiment`) for the debug endpoint.
-  - `POST /llm/complete` on `app/main.py` (internal-secret protected like `/health`):
-    `{prompt, schema_name?, system_prompt?}` -> `{text, structured?, provider, model}`;
-    `ProviderNotConfiguredError` surfaces as HTTP 503 with the typed error message.
-  - Added real deps: `strands-agents`, `strands-agents-tools`, `anthropic`, `boto3` (both
-    `pyproject.toml`/`uv.lock` and the `requirements.txt` fallback).
-  - Tests: `apps/agent-service/tests/test_llm_provider.py` — 15 passed, 2 skipped (the
-    `@pytest.mark.integration` live-Anthropic tests skip cleanly; no `ANTHROPIC_API_KEY` in
-    this environment — see "Environment / secrets" below, this contradicts the Slice-0-era
-    assumption that a key would be present).
-  - **Strands SDK research — materially affects Slice 5's design, see
-    `docs/DECISIONS.md`'s "Strands Agents SDK confirmed real..." entry for full detail**:
-    `strands-agents` (PyPI, 1.55.1 latest) is genuinely installable and ships a first-class
-    `strands.interventions.InterventionHandler` with a literal `before_tool_call` lifecycle
-    method returning typed `Proceed`/`Deny`/`Guide`/`Confirm`/`Transform` decisions — this
-    is real, verified (installed + source read), not inferred from documentation. `Deny`
-    genuinely blocks tool execution and short-circuits remaining handlers.
-    `on_error="deny"` should be Slice 5's default (fail-closed) for the permission gate.
-    The one unverified piece: an actual live Bedrock model invocation over the network —
-    no AWS credentials exist in this dev environment yet, so only construction/credential-
-    detection was exercised, not the real API round trip.
+- [x] **Slice 0 — monorepo scaffold + round trip**
+- [x] **Slice 2 — LLM provider abstraction** (`apps/agent-service/app/llm/`)
+- [x] **Slice 1 — Core entities + seed script + Company Pulse page**:
+  - Postgres container running via Docker Compose on port 5433.
+  - Complete schema moved from draft into `apps/web/prisma/schema.prisma` and applied via `prisma db push`.
+  - Prisma client generated and helper singleton created in `apps/web/lib/prisma.ts`.
+  - Seed script `apps/web/prisma/seed.ts` created and executed (`pnpm --filter web db:seed`), populating Kestrel Labs org, founder Aarav Mehta, goals, customers, contracts, subscriptions, expenses, past decisions, integrations, starter permissions, and tasks.
+  - `apps/web/app/page.tsx` updated to render real live seeded data (ARR goal progress, runway months, monthly burn, open tasks, active memory/decisions) alongside the agent-service health status.
 
 ### In progress
-- [ ] Prisma schema (Company Brain data model) — Slice 1 (separate concurrent agent; check
-      its own commits/status rather than assuming done)
-- [ ] Seed script + Company Pulse page — Slice 1
-- [ ] Connectors, agents, permission gate — Slices 3+ (LLM layer they'll sit on is done)
-- [ ] Remaining UI screens (10 listed in SDD §7)
+- [ ] Event system + Observer agent (Slice 3)
+- [ ] State Agent + trajectory math (Slice 4)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable
-via a Next.js internal API endpoint (depends on Slice 1's Prisma schema landing). Seed/cron
+via a Next.js internal API endpoint (now that Slice 1's Prisma schema has landed). Seed/cron
 script pushes synthetic events. Observer agent (agent-service) reads new events, classifies
-significance via `app/llm/get_provider()` (now built), writes results back through Next.js's
-API. Inbox/Events UI screen lists events with classification.
+significance via `app/llm/get_provider()`, writes results back through Next.js's API.
+Inbox/Events UI screen lists events with classification.
 
 Slice 5 (permission gate) implementers: read `bedrock_strands.py`'s module docstring and
 the DECISIONS.md entry above first — the `before_tool_call` intervention wiring pattern is

@@ -1,0 +1,764 @@
+// Axiom — Prisma schema (DRAFT)
+//
+// Scope: full data model for Slices 1-10 per docs/SDD.md §4 and docs/SLICES.md, designed
+// up front so later slices don't require destructive migrations. Written to
+// docs/drafts/schema.prisma.draft — NOT wired into apps/web/prisma/ yet; the scaffolding
+// agent owns that directory. Merge by hand once Slice 0 scaffolding settles.
+//
+// Conventions:
+// - All ids are `String @default(cuid())`.
+// - All mutable models carry `createdAt DateTime @default(now())` and
+//   `updatedAt DateTime @updatedAt`.
+// - Every org-scoped model has an indexed `orgId` FK, and compound indexes are added
+//   wherever a query will realistically filter by org + one more field (status, date,
+//   entity type) — org-scoped list/dashboard reads are the dominant access pattern per SDD.
+// - Money fields are stored as `Int` in minor currency units (paise) to avoid float drift
+//   in financial math — see DECISIONS.md "trajectory/scenario math is deterministic".
+//   Currency is implicitly INR for this build pass (no multi-currency requirement in SDD).
+// - JSON fields (`Json`) are used only where SDD explicitly calls for semi-structured,
+//   schema-less payloads (Event previous/newState, evidence arrays, tool invocations,
+//   audit input/output). Everything else is a typed column.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Multi-tenancy & auth ─────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   Membership[]
+  goals         Goal[]
+  customers     Customer[]
+  deals         Deal[]
+  contracts     Contract[]
+  invoices      Invoice[]
+  cashEvents    CashEvent[]
+  expenses      Expense[]
+  subscriptions Subscription[]
+  burnSnapshots    BurnSnapshot[]
+  runwaySnapshots  RunwaySnapshot[]
+  assets           Asset[]
+  complianceItems  ComplianceItem[]
+  decisions        Decision[]
+  events           Event[]
+  tasks            Task[]
+  integrations     Integration[]
+  permissions      Permission[]
+  approvalRequests ApprovalRequest[]
+  auditLogEntries  AuditLogEntry[]
+  scenarios        Scenario[]
+  trajectories     Trajectory[]
+
+  @@index([name])
+}
+
+// NextAuth-compatible User/Account/Session (minimal auth per SDD §3 — no dedicated auth
+// provider chosen yet, so this follows the standard NextAuth Prisma adapter shape so
+// whichever provider is wired later "just works" against this schema).
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts    Account[]
+  sessions    Session[]
+  memberships Membership[]
+
+  resolvedApprovals ApprovalRequest[] @relation("ApprovalResolvedBy")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Membership {
+  id     String         @id @default(cuid())
+  orgId  String
+  userId String
+  role   MembershipRole @default(OWNER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([orgId])
+  @@index([userId])
+}
+
+// ───────────────────────────── Goals & trajectory ─────────────────────────────
+
+enum GoalStatus {
+  ACTIVE
+  ACHIEVED
+  ABANDONED
+  AT_RISK
+}
+
+model Goal {
+  id            String     @id @default(cuid())
+  orgId         String
+  title         String
+  metric        String     // e.g. "ARR" — what the target/currentValue are measured in
+  targetValue   Int        // minor units where metric is money; raw count otherwise
+  currentValue  Int
+  deadline      DateTime?
+  status        GoalStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  milestones   Milestone[]
+  trajectories Trajectory[]
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+enum MilestoneStatus {
+  PENDING
+  ACHIEVED
+  MISSED
+}
+
+model Milestone {
+  id           String          @id @default(cuid())
+  orgId        String
+  goalId       String
+  title        String
+  targetValue  Int
+  currentValue Int
+  deadline     DateTime
+  status       MilestoneStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([goalId])
+  @@index([orgId, status])
+}
+
+// Snapshot of the replan history — every time the Strategist agent recomputes
+// current/target/bottleneck/nextActions for a goal, a row is appended here rather than
+// overwriting, so the trajectory over time is inspectable in the UI (Goals/Trajectories
+// screen) and by the Scenario Engine. Stored per DECISIONS.md ("snapshots are stored, not
+// computed-on-read"); pair with a pure `computeTrajectory(goal, events)` function in
+// agent-service that produces the fields below deterministically.
+model Trajectory {
+  id            String   @id @default(cuid())
+  orgId         String
+  goalId        String
+  currentValue  Int
+  targetValue   Int
+  bottleneck    String?  // narrated by LLM, but the delta math behind it is deterministic
+  nextActions   Json     // string[] or {title, why}[] — snapshot of recommended next actions
+  asOf          DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  goal         Goal         @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([goalId, asOf])
+}
+
+// ───────────────────────────── Revenue pipeline ─────────────────────────────
+
+enum CustomerStatus {
+  LEAD
+  ACTIVE
+  CHURNED
+}
+
+model Customer {
+  id          String         @id @default(cuid())
+  orgId       String
+  name        String
+  contactName String?
+  contactEmail String?
+  status      CustomerStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  deals        Deal[]
+  contracts    Contract[]
+  invoices     Invoice[]
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+enum DealStage {
+  PROSPECT
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model Deal {
+  id          String    @id @default(cuid())
+  orgId       String
+  customerId  String
+  title       String
+  valueAmount Int       // minor units (paise)
+  stage       DealStage @default(PROSPECT)
+  closedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  contract     Contract?
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([orgId, stage])
+}
+
+enum ContractStatus {
+  DRAFT
+  SIGNED
+  ACTIVE
+  ENDED
+}
+
+model Contract {
+  id             String         @id @default(cuid())
+  orgId          String
+  customerId     String
+  dealId         String?        @unique
+  title          String
+  valueAmount    Int            // minor units (paise), total contract value
+  billingCycle   String         // e.g. "monthly", "annual", "one_time"
+  startDate      DateTime
+  endDate        DateTime?
+  status         ContractStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  deal         Deal?        @relation(fields: [dealId], references: [id])
+  invoices     Invoice[]
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([orgId, status])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  VOID
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  orgId       String
+  customerId  String
+  contractId  String?
+  amount      Int           // minor units (paise)
+  status      InvoiceStatus @default(DRAFT)
+  issuedAt    DateTime      @default(now())
+  dueAt       DateTime?
+  paidAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  contract     Contract?    @relation(fields: [contractId], references: [id])
+  cashEvents   CashEvent[]
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([orgId, status])
+}
+
+enum CashDirection {
+  IN
+  OUT
+}
+
+// Actual ledger of realized cash movement — distinct from Invoice (which can be unpaid) and
+// from Expense/Subscription (which are recurring obligations, not necessarily-yet-paid
+// events). BurnSnapshot/RunwaySnapshot are computed from this table plus Expense.
+model CashEvent {
+  id          String        @id @default(cuid())
+  orgId       String
+  invoiceId   String?
+  direction   CashDirection
+  amount      Int           // minor units (paise), always positive; sign implied by direction
+  description String
+  occurredAt  DateTime      @default(now())
+
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  @@index([orgId])
+  @@index([orgId, occurredAt])
+}
+
+// ───────────────────────────── Finance / burn / runway ─────────────────────────────
+
+enum ExpenseCategory {
+  INFRASTRUCTURE
+  SAAS_TOOLS
+  PAYROLL
+  OFFICE
+  MARKETING
+  LEGAL_COMPLIANCE
+  OTHER
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  orgId       String
+  vendor      String
+  category    ExpenseCategory
+  amount      Int             // minor units (paise)
+  occurredAt  DateTime        @default(now())
+  recurring   Boolean         @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, occurredAt])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAUSED
+}
+
+// Recurring vendor obligations (AWS, SaaS tools). Distinct from Expense (a logged spend
+// event) — a Subscription is the standing commitment; it generates Expense rows on each
+// billing cycle (or is read directly for burn projection even before the Expense lands).
+model Subscription {
+  id            String             @id @default(cuid())
+  orgId         String
+  vendor        String
+  amount        Int                // minor units (paise) per billing cycle
+  billingCycle  String             // "monthly" | "annual"
+  status        SubscriptionStatus @default(ACTIVE)
+  startedAt     DateTime           @default(now())
+  cancelledAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+// Stored (not computed-on-read) per DECISIONS.md — burn must be inspectable historically
+// (was burn spiking before the AWS anomaly?) and the demo needs a stable point-in-time
+// number rather than a live recalculation that could drift between page loads. Pair with a
+// pure `computeBurn(expenses, subscriptions, windowStart, windowEnd): number` function in
+// agent-service/lib — this table stores that function's output plus its inputs' provenance.
+model BurnSnapshot {
+  id              String   @id @default(cuid())
+  orgId           String
+  monthlyBurn     Int      // minor units (paise) — avg burn for the period this snapshot covers
+  periodStart     DateTime
+  periodEnd       DateTime
+  computedAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, computedAt])
+}
+
+// Stored per DECISIONS.md ("runwayMonths = cash / avgMonthlyBurn" is a deterministic pure
+// function — see agent-service — but the *result* is snapshotted so Company Pulse, the
+// Scenario Engine, and AuditLogEntry all reference the exact same historical number instead
+// of each recomputing it slightly differently at different times).
+model RunwaySnapshot {
+  id             String   @id @default(cuid())
+  orgId          String
+  cashOnHand     Int      // minor units (paise)
+  monthlyBurn    Int      // minor units (paise), the burn figure this runway was derived from
+  runwayMonths   Float    // cashOnHand / monthlyBurn, computed deterministically pre-write
+  computedAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, computedAt])
+}
+
+// ───────────────────────────── Assets ─────────────────────────────
+
+enum AssetType {
+  DOMAIN
+  REPOSITORY
+  DOCUMENT
+  CREDENTIAL
+  HARDWARE
+  OTHER
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  orgId     String
+  name      String
+  type      AssetType
+  value     String?   // freeform: URL, repo path, serial number, etc.
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, type])
+}
+
+// ───────────────────────────── Compliance ─────────────────────────────
+
+enum ComplianceStatus {
+  VERIFIED
+  INFERRED
+  RECOMMENDED
+}
+
+model ComplianceItem {
+  id          String           @id @default(cuid())
+  orgId       String
+  title       String
+  description String?
+  status      ComplianceStatus @default(INFERRED)
+  confidence  Float            // 0.0-1.0 — how sure the agent is, since live compliance
+                                // research is out of scope this pass (SDD §2.4) and most
+                                // rows here are seeded/inferred rather than verified live
+  sourceUrl   String?
+  lastChecked DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+// ───────────────────────────── Decisions / memory ─────────────────────────────
+
+enum DecisionStatus {
+  ACTIVE
+  SUPERSEDED
+  REVERSED
+}
+
+model Decision {
+  id         String         @id @default(cuid())
+  orgId      String
+  title      String
+  reason     String
+  date       DateTime       @default(now())
+  reviewDate DateTime?
+  status     DecisionStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  // Self-relation: a Decision can conflict with any number of other Decisions in either
+  // direction. Modeled as an explicit join table (rather than a Prisma implicit m2m on a
+  // self-relation) so conflicts carry no extra metadata now but could (e.g. detectedBy,
+  // detectedAt) without another migration.
+  conflictsFrom DecisionConflict[] @relation("ConflictSource")
+  conflictsTo   DecisionConflict[] @relation("ConflictTarget")
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+model DecisionConflict {
+  id               String   @id @default(cuid())
+  decisionId       String
+  conflictsWithId  String
+  detectedAt       DateTime @default(now())
+
+  decision      Decision @relation("ConflictSource", fields: [decisionId], references: [id], onDelete: Cascade)
+  conflictsWith Decision @relation("ConflictTarget", fields: [conflictsWithId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionId, conflictsWithId])
+  @@index([decisionId])
+  @@index([conflictsWithId])
+}
+
+// ───────────────────────────── Events ─────────────────────────────
+
+model Event {
+  id            String   @id @default(cuid())
+  orgId         String
+  source        String   // e.g. "gmail", "slack", "manual", "seed_script"
+  entityType    String   // e.g. "Contract", "Expense" — the canonical entity this event is about
+  entityId      String?  // nullable: an event may precede the entity it will create
+  previousState Json?
+  newState      Json?
+  confidence    Float    @default(1.0)
+  evidence      Json     @default("[]") // JSON array of evidence refs (source snippets, URLs, ids)
+  processed     Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, processed])
+  @@index([orgId, entityType, entityId])
+}
+
+// ───────────────────────────── Tasks ─────────────────────────────
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  DISMISSED
+}
+
+model Task {
+  id       String       @id @default(cuid())
+  orgId    String
+  title    String
+  why      String       // rationale surfaced to the founder — why this task exists
+  impact   String?       // expected effect if completed (e.g. "unblocks onboarding")
+  source   String        // what produced this task, e.g. "operator_agent", "event:<id>"
+  priority TaskPriority  @default(MEDIUM)
+  status   TaskStatus    @default(OPEN)
+  dueAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, status])
+  @@index([orgId, priority])
+}
+
+// ───────────────────────────── Integrations ─────────────────────────────
+
+enum IntegrationProvider {
+  GMAIL
+  SLACK
+  CALENDAR
+  DRIVE
+  GITHUB
+}
+
+enum IntegrationMode {
+  SEEDED
+  LIVE
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+model Integration {
+  id        String              @id @default(cuid())
+  orgId     String
+  provider  IntegrationProvider
+  mode      IntegrationMode     @default(SEEDED)
+  status    IntegrationStatus   @default(CONNECTED)
+  lastSyncAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, provider])
+  @@index([orgId])
+}
+
+// ───────────────────────────── Authority / permissions ─────────────────────────────
+
+enum PermissionLevel {
+  READ
+  DRAFT
+  RECOMMEND
+  EXECUTE
+  REQUIRE_APPROVAL
+}
+
+// Org-scoped policy table: one row per actionType per org. Enforced server-side in
+// agent-service's tool layer (Strands before_tool_call-style intervention) — never just
+// prompted. See DECISIONS.md.
+model Permission {
+  id         String          @id @default(cuid())
+  orgId      String
+  actionType String          // e.g. "send_invoice_email", "create_task", "modify_contract"
+  level      PermissionLevel @default(RECOMMEND)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, actionType])
+  @@index([orgId])
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  STALE
+}
+
+// A blocked tool call above its permitted level. `toolInvocation` is the exact serialized
+// call to replay on approval (never re-run the agent's reasoning — see DECISIONS.md).
+// `stateVersion` pins the company-state version/hash it was proposed against; if that
+// version has since changed, the approval is invalidated (status -> STALE) rather than
+// executed against stale state.
+model ApprovalRequest {
+  id             String         @id @default(cuid())
+  orgId          String
+  toolInvocation Json           // serialized {toolName, args, agent, ...}
+  stateVersion   String         // version/hash of company state this was proposed against
+  status         ApprovalStatus @default(PENDING)
+  resolvedById   String?
+  resolvedAt     DateTime?
+  reason         String?        // why it required approval (which Permission rule triggered)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  resolvedBy   User?          @relation("ApprovalResolvedBy", fields: [resolvedById], references: [id])
+
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+// ───────────────────────────── Audit log ─────────────────────────────
+
+model AuditLogEntry {
+  id                   String   @id @default(cuid())
+  orgId                String
+  timestamp            DateTime @default(now())
+  agent                String   // e.g. "observer", "strategist", "operator", "verifier", "memory"
+  action                String   // human-readable summary of what was attempted
+  tool                 String   // the specific tool/function invoked
+  input                Json
+  output               Json?
+  evidence             Json     @default("[]")
+  authorizationDecision String  // e.g. "allowed:EXECUTE", "blocked:REQUIRE_APPROVAL"
+  result               String   // e.g. "success", "failure", "blocked"
+  verificationStatus   String   @default("unverified") // set by Verifier agent after re-read
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, timestamp])
+  @@index([orgId, agent])
+}
+
+// ───────────────────────────── Scenario engine ─────────────────────────────
+
+// Slice 9 — counterfactual comparisons (e.g. "hire a developer next month?"). `options` is
+// deterministically computed (runway deltas etc, per DECISIONS.md) and stored as JSON;
+// `recommendation` is the LLM's narrated choice between already-computed options, not
+// independently derived math.
+model Scenario {
+  id             String   @id @default(cuid())
+  orgId          String
+  question       String   // the NL command that triggered this, e.g. "Should I hire a developer next month?"
+  options        Json     // e.g. [{label: "Option A: Hire now", runwayDeltaMonths: -2.1, ...}, ...]
+  recommendation String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([orgId, createdAt])
+}

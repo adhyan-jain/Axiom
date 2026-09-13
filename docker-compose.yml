@@ -1,7 +1,10 @@
-version: "3.9"
-
-# Slice 0: Postgres + Redis are available but not yet wired into the apps.
-# apps/web will own the Postgres schema (Prisma) starting Slice 1.
+# Slice 1: Postgres + Redis wired into apps/web (Prisma) via DATABASE_URL/REDIS_URL.
+#
+# Host ports are remapped off the Postgres/Redis defaults (5433/6380 instead of 5432/6379)
+# because this dev machine already runs other unrelated Postgres/Redis instances on the
+# default ports — see docs/DECISIONS.md. Container-internal ports are untouched, so this is
+# purely a host-side remap; update DATABASE_URL/REDIS_URL in .env to match if you change
+# these.
 
 services:
   postgres:
@@ -12,7 +15,7 @@ services:
       POSTGRES_PASSWORD: axiom
       POSTGRES_DB: axiom
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - axiom_postgres_data:/var/lib/postgresql/data
 
@@ -20,7 +23,7 @@ services:
     image: redis:7
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - axiom_redis_data:/data
 
