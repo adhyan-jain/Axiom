@@ -79,9 +79,15 @@ Provide a clear strategic recommendation and trigger condition to revisit.
         if result.structured and isinstance(result.structured, ScenarioResult) and result.structured.options:
             return result.structured
 
+        option_b_runway = options[1].projected_runway_months
         return ScenarioResult(
             question=question,
             options=options,
-            recommendation="Favor Option A (Hire now) for immediate product momentum if onboarding velocity is critical, as Option B (waiting 3 months post-burn) results in a shorter remaining runway window (3.59 months) due to interim burn before the hire takes effect.",
+            recommendation=(
+                "Favor Option A (Hire now) for immediate product momentum if onboarding "
+                "velocity is critical, as Option B (waiting 3 months post-burn) results in "
+                f"a shorter remaining runway window ({option_b_runway:.2f} months) due to "
+                "interim burn before the hire takes effect."
+            ),
             trigger_condition="Re-run scenario once recognized MRR crosses ₹3.2L or cash on hand exceeds ₹20L.",
         )
