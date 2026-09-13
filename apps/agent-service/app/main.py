@@ -11,7 +11,7 @@ later slices' tests.
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth import require_internal_secret
 from app.llm import ProviderNotConfiguredError, get_provider

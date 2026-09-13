@@ -82,6 +82,6 @@ Provide a clear strategic recommendation and trigger condition to revisit.
         return ScenarioResult(
             question=question,
             options=options,
-            recommendation="Favor Option B (Wait 3 months). Hiring now reduces runway by ~1.63 months without immediate revenue offset; waiting for Nimbus Health onboarding softens cash impact.",
+            recommendation="Favor Option A (Hire now) for immediate product momentum if onboarding velocity is critical, as Option B (waiting 3 months post-burn) results in a shorter remaining runway window (3.59 months) due to interim burn before the hire takes effect.",
             trigger_condition="Re-run scenario once recognized MRR crosses ₹3.2L or cash on hand exceeds ₹20L.",
         )

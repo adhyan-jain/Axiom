@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 const INTERNAL_SECRET = process.env.AGENT_SERVICE_SHARED_SECRET;
 
 function checkInternalAuth(request: Request) {
-  if (!INTERNAL_SECRET) return true;
+  if (!INTERNAL_SECRET) return false; // Fail-closed per DECISIONS.md security standards
   const header = request.headers.get("X-Axiom-Internal-Secret");
   return header === INTERNAL_SECRET;
 }
@@ -41,6 +41,28 @@ export async function POST(request: Request) {
           billingCycle: "one_time",
           startDate: new Date(),
           status: "SIGNED",
+        },
+      });
+
+      const invoice = await prisma.invoice.create({
+        data: {
+          orgId: org.id,
+          customerId,
+          contractId: contract.id,
+          amount: 20000000,
+          status: "PAID",
+          paidAt: new Date(),
+        },
+      });
+
+      await prisma.cashEvent.create({
+        data: {
+          orgId: org.id,
+          invoiceId: invoice.id,
+          direction: "IN",
+          amount: 20000000,
+          description: "Payment received: Nimbus Health Pilot Contract",
+          occurredAt: new Date(),
         },
       });
 
@@ -186,7 +208,7 @@ export async function POST(request: Request) {
               runway_delta_months: -3.33,
             },
           ],
-          recommendation: "Favor Option B (Wait 3 months). Hiring now eats ~1.63 months runway before revenue offsets land.",
+          recommendation: "Favor Option A (Hire now) for immediate product momentum if onboarding velocity is critical, as Option B (waiting 3 months post-burn) results in a shorter remaining runway window (3.59 months) due to interim burn before the hire takes effect.",
         },
       });
 
