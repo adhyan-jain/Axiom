@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { StructuredPanel } from "@/components/StructuredData";
+import { Surface } from "@/components/primitives";
+import AuditEntryRow from "@/components/AuditEntryRow";
 
 export const revalidate = 0;
 
@@ -9,66 +10,43 @@ export default async function AuditLogPage() {
     take: 100,
   });
 
+  const agents = Array.from(new Set(auditEntries.map((e) => e.agent))).sort();
+
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 space-y-6">
-      <div className="flex items-center justify-between border-b pb-6">
+    <main className="mx-auto min-h-screen max-w-5xl space-y-8 px-6 py-10">
+      <div className="flex flex-col gap-3 border-b border-hairline pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Agent Activity & Audit Log
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Complete, immutable trail of all agent tool executions and authorization decisions
+          <h1 className="display-heading text-display-lg text-ink-primary">Audit timeline</h1>
+          <p className="mt-1 text-body-sm text-ink-secondary">
+            Every agent tool call, evidence, permission decision, and verification outcome —
+            immutable, forensic order
           </p>
         </div>
-      </div>
-
-      <div className="space-y-4">
-        {auditEntries.length === 0 ? (
-          <div className="p-8 text-center border rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-500">
-            No audit log entries recorded yet.
+        {agents.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {agents.map((agent) => (
+              <span
+                key={agent}
+                className="rounded-sm border border-hairline bg-surface-2 px-2 py-0.5 text-body-sm font-num text-ink-secondary"
+              >
+                {agent}
+              </span>
+            ))}
           </div>
-        ) : (
-          auditEntries.map((entry) => (
-            <div
-              key={entry.id}
-              className="p-5 border rounded-xl bg-card text-card-foreground shadow-sm space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-base text-slate-900 dark:text-slate-100">
-                    {entry.action}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded border bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-mono">
-                    {entry.agent} agent
-                  </span>
-                  <span className="text-xs font-mono text-slate-500">
-                    tool: {entry.tool}
-                  </span>
-                </div>
-                <span
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                    entry.authorizationDecision.startsWith("allowed")
-                      ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-                      : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                  }`}
-                >
-                  {entry.authorizationDecision}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <StructuredPanel label="Input" data={entry.input} />
-                <StructuredPanel label="Output" data={entry.output} />
-              </div>
-
-              <div className="text-xs text-slate-400 flex items-center justify-between pt-2 border-t">
-                <span>Verification: {entry.verificationStatus}</span>
-                <span>{new Date(entry.timestamp).toLocaleString()}</span>
-              </div>
-            </div>
-          ))
         )}
       </div>
+
+      {auditEntries.length === 0 ? (
+        <Surface tier={1} className="p-8 text-center text-body-sm text-ink-faint">
+          No audit log entries recorded yet.
+        </Surface>
+      ) : (
+        <ol className="space-y-0">
+          {auditEntries.map((entry, i) => (
+            <AuditEntryRow key={entry.id} entry={entry} isLast={i === auditEntries.length - 1} />
+          ))}
+        </ol>
+      )}
     </main>
   );
 }
