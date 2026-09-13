@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { StructuredPanel } from "@/components/StructuredData";
+import ApprovalActions from "@/components/ApprovalActions";
 
 export const revalidate = 0;
 
@@ -48,21 +50,8 @@ export default async function ActionsPage() {
                   {approval.status}
                 </span>
               </div>
-              <div className="text-xs font-mono bg-slate-900 text-slate-200 p-3 rounded-lg overflow-x-auto">
-                <span className="text-slate-400 block mb-1">Serialized Tool Invocation (replays without re-running agent reasoning):</span>
-                {JSON.stringify(approval.toolInvocation, null, 2)}
-              </div>
-              <div className="flex items-center gap-3 pt-2">
-                <button className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">
-                  Approve
-                </button>
-                <button className="px-4 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700">
-                  Reject
-                </button>
-                <button className="px-4 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold">
-                  Investigate
-                </button>
-              </div>
+              <StructuredPanel label="Proposed tool invocation" data={approval.toolInvocation} />
+              <ApprovalActions approvalId={approval.id} />
             </div>
           ))
         )}

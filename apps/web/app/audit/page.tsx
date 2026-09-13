@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { StructuredPanel } from "@/components/StructuredData";
 
 export const revalidate = 0;
 
@@ -55,15 +56,9 @@ export default async function AuditLogPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg font-mono text-slate-700 dark:text-slate-300">
-                  <span className="text-slate-400 block mb-1">Input:</span>
-                  {JSON.stringify(entry.input, null, 2)}
-                </div>
-                <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg font-mono text-slate-700 dark:text-slate-300">
-                  <span className="text-slate-400 block mb-1">Output:</span>
-                  {JSON.stringify(entry.output, null, 2)}
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <StructuredPanel label="Input" data={entry.input} />
+                <StructuredPanel label="Output" data={entry.output} />
               </div>
 
               <div className="text-xs text-slate-400 flex items-center justify-between pt-2 border-t">

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import ProcessEventButton from "@/components/ProcessEventButton";
+import { StructuredPanel, StructuredNode } from "@/components/StructuredData";
 
 export const revalidate = 0;
 
@@ -57,20 +58,13 @@ export default async function EventsPage() {
               </div>
 
               {event.newState && (
-                <div className="text-sm bg-slate-50 dark:bg-slate-900 p-3 rounded-lg font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
-                  <span className="text-xs text-slate-400 block mb-1">New State Payload:</span>
-                  {JSON.stringify(event.newState, null, 2)}
-                </div>
+                <StructuredPanel label="Resulting state" data={event.newState} />
               )}
 
               {Array.isArray(event.evidence) && event.evidence.length > 0 && (
                 <div className="text-xs text-slate-500 space-y-1">
                   <span className="font-semibold block">Evidence:</span>
-                  <ul className="list-disc list-inside space-y-0.5">
-                    {event.evidence.map((item: any, idx: number) => (
-                      <li key={idx}>{typeof item === "string" ? item : JSON.stringify(item)}</li>
-                    ))}
-                  </ul>
+                  <StructuredNode data={event.evidence as any} />
                 </div>
               )}
 
