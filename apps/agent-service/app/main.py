@@ -199,6 +199,25 @@ async def connector_sync(body: ConnectorSyncRequest) -> list[dict[str, Any]]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+class ScenarioRequest(BaseModel):
+    question: str
+    cash_on_hand: int = 180000000
+    monthly_burn: int = 26000000
+
+
+@app.post(
+    "/scenario/evaluate",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def evaluate_scenario(body: ScenarioRequest) -> dict[str, Any]:
+    """Slice 9: Scenario Engine endpoint computing counterfactual runway options."""
+    from app.scenario_engine import ScenarioEngine
+    engine = ScenarioEngine()
+    res = await engine.evaluate_question(body.question, body.cash_on_hand, body.monthly_burn)
+    return res.model_dump()
+
+
+
 
 
 

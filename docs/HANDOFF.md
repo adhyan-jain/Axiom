@@ -34,14 +34,15 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] **Slice 5 — Authority model + permission gate + audit log**
 - [x] **Slice 6 — Strategist + Operator agents, Tasks, and approvals UI**
 - [x] **Slice 7 — Verifier + Memory Agent + Decisions/Memory UI**
-- [x] **Slice 8 — Connectors (seeded) for Gmail/Slack/Calendar/Drive/GitHub**:
-  - `apps/agent-service/app/connectors/base.py` & `fixtures/seeded_data.json`: Abstract connector classes (`EmailConnector`, `SlackConnector`, `CalendarConnector`, `DriveConnector`, `GitHubConnector`) providing `SeededConnector` implementations and `LiveConnector` stubs raising `ConnectorNotConfiguredError`.
-  - `apps/agent-service/app/main.py`: Exposed `POST /connectors/sync` endpoint.
-  - `apps/agent-service/tests/test_connectors.py`: Unit test suite (27 tests passing).
-  - `apps/web/app/integrations/page.tsx`: Integrations & Connectors UI screen.
+- [x] **Slice 8 — Connectors (seeded) for Gmail/Slack/Calendar/Drive/GitHub**
+- [x] **Slice 9 — Scenario Engine + NL command bar**:
+  - `apps/agent-service/app/scenario_engine.py`: `ScenarioEngine` evaluating counterfactual developer hiring options (Option A: Hire now vs Option B: Wait 3 months post-Nimbus contract) with deterministic runway math.
+  - `apps/agent-service/app/main.py`: Exposed `POST /scenario/evaluate` endpoint.
+  - `apps/agent-service/tests/test_scenario_engine.py`: Unit test suite (28 tests passing).
+  - `apps/web/app/scenarios/page.tsx`: Counterfactual Scenarios UI screen rendering option deltas, LLM recommendation, and trigger conditions.
 
 ### In progress
-- [ ] Scenario Engine + NL command bar (Slice 9)
+- [ ] Flagship demo hardening + remaining nav placeholders (Slice 10)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable
