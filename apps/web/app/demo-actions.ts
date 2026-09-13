@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { AgentServiceError } from "@/lib/agentServiceClient";
 import { runStep1Nimbus, runStep2AwsSpike, runStep3HireScenario } from "@/lib/demoSteps";
+import { errorMessage } from "@/lib/errors";
 
 export async function runDemoStepAction(step: 1 | 2 | 3) {
   try {
@@ -31,10 +32,10 @@ export async function runDemoStepAction(step: 1 | 2 | 3) {
     revalidatePath("/audit");
 
     return { ok: true as const, result };
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof AgentServiceError) {
       return { ok: false as const, error: `agent-service call failed: ${error.message}` };
     }
-    return { ok: false as const, error: error.message ?? "Failed to run demo step" };
+    return { ok: false as const, error: errorMessage(error, "Failed to run demo step") };
   }
 }

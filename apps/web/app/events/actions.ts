@@ -15,6 +15,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { observerProcess } from "@/lib/agentServiceClient";
+import { errorMessage } from "@/lib/errors";
 
 export async function processEventAction(eventId: string) {
   const event = await prisma.event.findUnique({ where: { id: eventId } });
@@ -57,7 +58,7 @@ export async function processEventAction(eventId: string) {
 
     revalidatePath("/events");
     return { ok: true as const, classification };
-  } catch (error: any) {
-    return { ok: false as const, error: error.message ?? "Failed to process event" };
+  } catch (error) {
+    return { ok: false as const, error: errorMessage(error, "Failed to process event") };
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkInternalAuth } from "@/lib/internalAuth";
+import { errorMessage } from "@/lib/errors";
 
 export async function POST(request: Request) {
   if (!checkInternalAuth(request)) {
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ status: "success" });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
   }
 }

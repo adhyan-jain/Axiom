@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { checkInternalAuth } from "@/lib/internalAuth";
 import { AgentServiceError } from "@/lib/agentServiceClient";
 import { runStep1Nimbus, runStep2AwsSpike, runStep3HireScenario } from "@/lib/demoSteps";
+import { errorMessage } from "@/lib/errors";
 
 /**
  * Flagship demo runner (SDD §8) — HTTP route for internal/service callers (curl,
@@ -28,13 +29,13 @@ export async function POST(request: Request) {
     if (step === 3) return NextResponse.json(await runStep3HireScenario(org.id));
 
     return NextResponse.json({ error: "Invalid step" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof AgentServiceError) {
       return NextResponse.json(
         { error: `agent-service call failed: ${error.message}` },
         { status: error.status === 503 ? 503 : 502 },
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
   }
 }

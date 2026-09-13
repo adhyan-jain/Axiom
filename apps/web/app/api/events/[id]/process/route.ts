@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkInternalAuth } from "@/lib/internalAuth";
 import { observerProcess, AgentServiceError } from "@/lib/agentServiceClient";
+import { errorMessage } from "@/lib/errors";
 
 /**
  * Runs a single Event through the real Observer agent and persists the classification.
@@ -55,13 +56,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     });
 
     return NextResponse.json({ event: updated, classification });
-  } catch (error: any) {
+  } catch (error) {
     if (error instanceof AgentServiceError) {
       return NextResponse.json(
         { error: `agent-service call failed: ${error.message}` },
         { status: error.status === 503 ? 503 : 502 },
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
   }
 }
