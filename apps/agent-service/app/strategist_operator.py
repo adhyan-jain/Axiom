@@ -8,7 +8,12 @@ permission table.
 from typing import Any
 from pydantic import BaseModel, Field
 from app.llm import get_provider, LLMProvider
-from app.permission_gate import check_permission, PermissionLevel
+from app.permission_gate import (
+    AxiomPermissionInterventionHandler,
+    ApprovalRequiredError,
+    check_permission,
+    PermissionLevel,
+)
 
 class BottleneckAnalysis(BaseModel):
     primary_bottleneck: str = Field(..., description="Primary bottleneck slowing goal achievement")
@@ -80,9 +85,27 @@ Focus: {bottleneck.recommended_focus}
             )
         ]
 
+        # Route each proposal through the real Strands intervention point
+        # (AxiomPermissionInterventionHandler.before_tool_call) rather than calling
+        # check_permission directly — this is the same enforcement path a live Strands
+        # Agent's tool loop would hit. before_tool_call raises ApprovalRequiredError
+        # (escalate) or PermissionError (hard deny) instead of returning a value; we catch
+        # both here and use check_permission's own result (attached to ApprovalRequiredError,
+        # or recomputed for the allowed/hard-deny cases) as the single source of truth for
+        # the metadata in the response, so this endpoint's shape stays a plain
+        # JSON-serializable list rather than letting an exception 500 out of
+        # /operator/propose.
+        handler = AxiomPermissionInterventionHandler(policy_table)
         gated_proposals = []
         for prop in raw_proposals:
-            gate_res = check_permission(prop.action_type, PermissionLevel.EXECUTE, policy_table)
+            try:
+                handler.before_tool_call(prop.action_type, prop.tool_invocation)
+                gate_res = check_permission(prop.action_type, PermissionLevel.EXECUTE, policy_table)
+            except ApprovalRequiredError as exc:
+                gate_res = exc.gate_result
+            except PermissionError:
+                gate_res = check_permission(prop.action_type, PermissionLevel.EXECUTE, policy_table)
+
             gated_proposals.append({
                 "task": prop.model_dump(),
                 "gate_result": gate_res.model_dump(),

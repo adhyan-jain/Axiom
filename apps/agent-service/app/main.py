@@ -139,11 +139,35 @@ class OperatorRequest(BaseModel):
     dependencies=[Depends(require_internal_secret)],
 )
 async def operator_propose(body: OperatorRequest) -> list[dict[str, Any]]:
-    """Slice 6: Operator agent endpoint proposing gated actions."""
+    """Slice 6: Operator agent endpoint proposing gated actions.
+
+    OperatorAgent.propose_actions (app/strategist_operator.py) already routes each
+    proposal through AxiomPermissionInterventionHandler.before_tool_call and catches its
+    ApprovalRequiredError/PermissionError internally, returning a plain list where each
+    entry's `gate_result.requires_approval` tells the caller (apps/web) whether to persist
+    an ApprovalRequest instead of executing. This try/except is a defensive backstop only —
+    per DECISIONS.md, an approval-required tool call must never surface as a bare 500;
+    if either exception type ever escapes propose_actions (e.g. a future code path that
+    calls the handler directly), it still becomes a structured 200/403 response here
+    instead of crashing the request.
+    """
     from app.strategist_operator import OperatorAgent, BottleneckAnalysis
+    from app.permission_gate import ApprovalRequiredError
+
     agent = OperatorAgent()
     bottleneck_obj = BottleneckAnalysis(**body.bottleneck)
-    return await agent.propose_actions(bottleneck_obj, body.policy_table)
+    try:
+        return await agent.propose_actions(bottleneck_obj, body.policy_table)
+    except ApprovalRequiredError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "approval_required",
+                "gate_result": exc.gate_result.model_dump(),
+            },
+        ) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail={"error": "permission_denied", "reason": str(exc)}) from exc
 
 
 class VerifyRequest(BaseModel):

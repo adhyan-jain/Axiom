@@ -316,7 +316,11 @@ async function main() {
     data: [
       { orgId: org.id, actionType: 'create_task', level: PermissionLevel.RECOMMEND },
       { orgId: org.id, actionType: 'send_customer_email', level: PermissionLevel.DRAFT },
-      { orgId: org.id, actionType: 'create_invoice', level: PermissionLevel.EXECUTE },
+      // REQUIRE_APPROVAL (not EXECUTE) so the flagship demo's Step 1 (Nimbus contract)
+      // exercises the real approval path: agent-service's permission gate should escalate
+      // invoice auto-creation to a persisted ApprovalRequest rather than silently
+      // executing it. See docs/DECISIONS.md and apps/web/app/api/demo/run/route.ts.
+      { orgId: org.id, actionType: 'create_invoice', level: PermissionLevel.REQUIRE_APPROVAL },
       { orgId: org.id, actionType: 'modify_contract', level: PermissionLevel.REQUIRE_APPROVAL },
       { orgId: org.id, actionType: 'cancel_subscription', level: PermissionLevel.REQUIRE_APPROVAL },
     ],

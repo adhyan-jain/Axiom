@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import ProcessEventButton from "@/components/ProcessEventButton";
 
 export const revalidate = 0;
 
@@ -41,15 +42,18 @@ export default async function EventsPage() {
                     {event.source}
                   </span>
                 </div>
-                <span
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                    event.processed
-                      ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-                      : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                  }`}
-                >
-                  {event.processed ? "Processed by Observer" : "Pending Processing"}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                      event.processed
+                        ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                        : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                    }`}
+                  >
+                    {event.processed ? "Processed by Observer" : "Pending Processing"}
+                  </span>
+                  {!event.processed && <ProcessEventButton eventId={event.id} />}
+                </div>
               </div>
 
               {event.newState && (

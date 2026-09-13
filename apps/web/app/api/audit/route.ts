@@ -1,13 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const INTERNAL_SECRET = process.env.AGENT_SERVICE_SHARED_SECRET;
-
-function checkInternalAuth(request: Request) {
-  if (!INTERNAL_SECRET) return true;
-  const header = request.headers.get("X-Axiom-Internal-Secret");
-  return header === INTERNAL_SECRET;
-}
+import { checkInternalAuth } from "@/lib/internalAuth";
 
 export async function GET(request: Request) {
   if (!checkInternalAuth(request)) {

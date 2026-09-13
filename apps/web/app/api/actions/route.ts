@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const INTERNAL_SECRET = process.env.AGENT_SERVICE_SHARED_SECRET;
-
-function checkInternalAuth(request: Request) {
-  if (!INTERNAL_SECRET) return true;
-  const header = request.headers.get("X-Axiom-Internal-Secret");
-  return header === INTERNAL_SECRET;
-}
+import { checkInternalAuth } from "@/lib/internalAuth";
+import { persistProposedAction } from "@/lib/actionPersistence";
 
 export async function GET(request: Request) {
   if (!checkInternalAuth(request)) {
@@ -43,32 +37,19 @@ export async function POST(request: Request) {
       targetOrgId = defaultOrg.id;
     }
 
-    if (requiresApproval) {
-      const approval = await prisma.approvalRequest.create({
-        data: {
-          orgId: targetOrgId,
-          toolInvocation: toolInvocation || { title, why },
-          stateVersion: "v1.0.0",
-          status: "PENDING",
-          reason: reason || "Requires approval per policy table",
-        },
-      });
-      return NextResponse.json({ type: "approval", approval }, { status: 201 });
-    }
-
-    const task = await prisma.task.create({
-      data: {
-        orgId: targetOrgId,
-        title,
-        why: why || "Proposed by Operator agent",
-        impact: impact || null,
-        source: source || "operator_agent",
-        priority: priority || "MEDIUM",
-        status: "OPEN",
-      },
+    const result = await persistProposedAction({
+      orgId: targetOrgId,
+      title,
+      why,
+      impact,
+      source,
+      priority,
+      toolInvocation,
+      requiresApproval: Boolean(requiresApproval),
+      reason,
     });
 
-    return NextResponse.json({ type: "task", task }, { status: 201 });
+    return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }

@@ -3,6 +3,55 @@
 Append-only. One entry per non-obvious call, newest first. Don't rewrite history; if a
 decision is reversed, add a new entry noting the reversal and why.
 
+## 2026-09-13 — Integration fix: real pipeline wiring, approval-vs-denial distinction, mock-for-this-env
+
+Four real design calls made while fixing the "web never calls agent-service" bug (see
+docs/HANDOFF.md's 2026-09-13 entry for the full list of what changed):
+
+1. **`ApprovalRequiredError` vs `PermissionError`**: `check_permission`'s current policy
+   semantics set `requires_approval=True` on *every* disallowed case (both explicit
+   `REQUIRE_APPROVAL` policy and plain insufficient-level denials) — there is currently no
+   policy value that produces a hard, non-escalatable denial. Rather than inventing a new
+   policy level to manufacture a hard-deny test case, `AxiomPermissionInterventionHandler.
+   before_tool_call` raises `ApprovalRequiredError(gate_result)` whenever
+   `gate_result.requires_approval` is true and falls through to plain `PermissionError`
+   otherwise — a branch that's currently unreachable via the real policy table but exists
+   so a future hard-deny policy type doesn't require changing the handler's contract. This
+   matches the "authority never silently lapses" principle literally: today, nothing in
+   this app hard-denies without a chance to escalate to a human.
+
+2. **Invoice auto-creation gating lives in web, mirrored from agent-service's hierarchy
+   logic**: `OperatorAgent.propose_actions`'s fallback path (exercised under `MockProvider`,
+   since its list-field synthesis always returns `[]`) only ever proposes one hardcoded
+   onboarding task — there's no "propose an invoice" action in the current agent code. But
+   the flagship demo needs a permission decision for invoice creation specifically (to
+   demonstrate REQUIRE_APPROVAL). Rather than inventing a new agent-service endpoint or
+   forcing invoice creation through the Operator's single-task flow, `apps/web/lib/
+   permissionGate.ts` mirrors `permission_gate.py`'s `check_permission` hierarchy
+   comparison exactly (same 5-level ordering, same REQUIRE_APPROVAL short-circuit) and is
+   used only for this one case, reading the same `Permission` table rows. This is a
+   deliberate, narrow, documented duplication of a *pure comparison function* — not a
+   second authority — and the file's own docstring says so. If this needs real agent
+   reasoning later (not just a level lookup), route it through agent-service instead.
+
+3. **`LLM_PROVIDER=mock` pinned explicitly for this dev environment**: auto-detect already
+   resolved to `mock` here (no `ANTHROPIC_API_KEY`, no AWS creds), so this is a
+   no-behavior-change, documentation-only pin — added so the choice is visible in `.env`
+   rather than an emergent property of what's absent. Not changed in `.env.example`,
+   which stays undocumented/auto-detecting for a clean machine.
+
+4. **Server Actions for browser-triggered agent calls, not client `fetch` with the internal
+   secret**: `AGENT_SERVICE_SHARED_SECRET` must never reach the browser (see
+   `lib/agentServiceClient.ts`'s docstring — "server-only"), but the Inbox/Events page
+   needed a real button that triggers `/observer/process`. Rather than adding a second,
+   unauthenticated code path into the internal API routes (which would reintroduce a
+   fail-open hole), the new "Process with Observer" button calls a Next.js Server Action
+   (`apps/web/app/events/actions.ts`) that runs server-side and talks to agent-service
+   directly — no HTTP hop through the app's own internal API, no secret exposure. This is
+   the same fix `apps/web/components/DemoControls.tsx` would need (it currently fetches
+   `/api/demo/run` with no auth header at all and will 401 under the fail-closed fix) but
+   that conversion was left as a follow-up — see docs/HANDOFF.md.
+
 ## 2026-09-13 — Strands Agents SDK confirmed real; native InterventionHandler API matches the Gate-1 design exactly
 Slice 2 research (installed `strands-agents` 1.55.1 live via `uv add`, then read the
 installed source under `.venv/lib/python3.12/site-packages/strands/`, not just docs):
