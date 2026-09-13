@@ -43,22 +43,28 @@ class LiveConnector(BaseConnector):
             f"Live OAuth connector for {self.provider_key!r} is not configured."
         )
 
-class EmailConnector(SeededConnector):
-    def __init__(self, mode: str = "SEEDED"):
-        super().__init__("gmail") if mode == "SEEDED" else LiveConnector.__init__(self, "gmail")
+def _make_connector(provider_key: str, mode: str) -> BaseConnector:
+    """Return a real LiveConnector in LIVE mode.
 
-class SlackConnector(SeededConnector):
-    def __init__(self, mode: str = "SEEDED"):
-        super().__init__("slack") if mode == "SEEDED" else LiveConnector.__init__(self, "slack")
+    The previous per-provider subclasses inherited from SeededConnector and, in "LIVE"
+    mode, called `LiveConnector.__init__(self, ...)` on that SeededConnector-typed
+    `self`. That only overwrote `provider_key`; method resolution still picked
+    `SeededConnector.fetch_latest_events`, so "LIVE" mode silently kept serving seeded
+    fixture data instead of raising ConnectorNotConfiguredError.
+    """
+    return LiveConnector(provider_key) if mode == "LIVE" else SeededConnector(provider_key)
 
-class CalendarConnector(SeededConnector):
-    def __init__(self, mode: str = "SEEDED"):
-        super().__init__("calendar") if mode == "SEEDED" else LiveConnector.__init__(self, "calendar")
+def EmailConnector(mode: str = "SEEDED") -> BaseConnector:
+    return _make_connector("gmail", mode)
 
-class DriveConnector(SeededConnector):
-    def __init__(self, mode: str = "SEEDED"):
-        super().__init__("drive") if mode == "SEEDED" else LiveConnector.__init__(self, "drive")
+def SlackConnector(mode: str = "SEEDED") -> BaseConnector:
+    return _make_connector("slack", mode)
 
-class GitHubConnector(SeededConnector):
-    def __init__(self, mode: str = "SEEDED"):
-        super().__init__("github") if mode == "SEEDED" else LiveConnector.__init__(self, "github")
+def CalendarConnector(mode: str = "SEEDED") -> BaseConnector:
+    return _make_connector("calendar", mode)
+
+def DriveConnector(mode: str = "SEEDED") -> BaseConnector:
+    return _make_connector("drive", mode)
+
+def GitHubConnector(mode: str = "SEEDED") -> BaseConnector:
+    return _make_connector("github", mode)
