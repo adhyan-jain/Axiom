@@ -1,0 +1,45 @@
+{
+  "gmail": [
+    {
+      "id": "msg_001",
+      "from": "priya@nimbushealth.care",
+      "subject": "Nimbus Health Pilot Contract Signed",
+      "body": "Hi Aarav, we have signed the platform pilot proposal (₹2,00,000). Looking forward to onboarding!",
+      "date": "2026-09-13T10:00:00Z"
+    }
+  ],
+  "slack": [
+    {
+      "id": "slack_001",
+      "channel": "#alerts",
+      "user": "aws-billing-bot",
+      "message": "AWS Cost Explorer alert: September spend projection $940 (₹78,000) vs August avg $540 (₹45,000). Anomaly detected on RDS + Data Transfer.",
+      "timestamp": "2026-09-13T12:00:00Z"
+    }
+  ],
+  "calendar": [
+    {
+      "id": "cal_001",
+      "summary": "Nimbus Health Kickoff Meeting",
+      "start": "2026-09-15T10:00:00Z",
+      "attendees": ["founder@kestrellabs.dev", "priya@nimbushealth.care"]
+    }
+  ],
+  "drive": [
+    {
+      "id": "doc_001",
+      "name": "Nimbus_Health_Pilot_Signed_Contract.pdf",
+      "mimeType": "application/pdf",
+      "url": "https://drive.google.com/file/d/nimbus_contract_001"
+    }
+  ],
+  "github": [
+    {
+      "id": "gh_001",
+      "repo": "kestrellabs/observability-agent",
+      "event": "push",
+      "author": "aarav",
+      "commit": "feat: initial onboarding tenant setup for Nimbus Health"
+    }
+  ]
+}

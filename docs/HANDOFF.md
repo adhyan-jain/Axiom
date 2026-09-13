@@ -33,15 +33,15 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] **Slice 4 — State Agent + deterministic trajectory math**
 - [x] **Slice 5 — Authority model + permission gate + audit log**
 - [x] **Slice 6 — Strategist + Operator agents, Tasks, and approvals UI**
-- [x] **Slice 7 — Verifier + Memory Agent + Decisions/Memory UI**:
-  - `apps/agent-service/app/verifier_memory.py`: `VerifierAgent` (independent post-execution re-reads) and `MemoryAgent` (checking events against decision records for policy conflicts).
-  - `apps/agent-service/app/main.py`: Exposed `POST /verifier/verify` and `POST /memory/check-conflict` endpoints.
-  - `apps/agent-service/tests/test_verifier_memory.py`: Unit test suite (24 tests passing).
-  - `apps/web/app/api/decisions/route.ts`: API endpoints for fetching and creating `Decision` records.
-  - `apps/web/app/decisions/page.tsx`: Organizational Memory & Decisions UI screen listing decisions and flagged conflicts.
+- [x] **Slice 7 — Verifier + Memory Agent + Decisions/Memory UI**
+- [x] **Slice 8 — Connectors (seeded) for Gmail/Slack/Calendar/Drive/GitHub**:
+  - `apps/agent-service/app/connectors/base.py` & `fixtures/seeded_data.json`: Abstract connector classes (`EmailConnector`, `SlackConnector`, `CalendarConnector`, `DriveConnector`, `GitHubConnector`) providing `SeededConnector` implementations and `LiveConnector` stubs raising `ConnectorNotConfiguredError`.
+  - `apps/agent-service/app/main.py`: Exposed `POST /connectors/sync` endpoint.
+  - `apps/agent-service/tests/test_connectors.py`: Unit test suite (27 tests passing).
+  - `apps/web/app/integrations/page.tsx`: Integrations & Connectors UI screen.
 
 ### In progress
-- [ ] Connectors (seeded) for Gmail/Slack/Calendar/Drive/GitHub (Slice 8)
+- [ ] Scenario Engine + NL command bar (Slice 9)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable

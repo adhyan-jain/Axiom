@@ -180,5 +180,25 @@ async def memory_check_conflict(body: MemoryConflictRequest) -> dict[str, Any]:
     return res.model_dump()
 
 
+class ConnectorSyncRequest(BaseModel):
+    provider: str
+    mode: str = "SEEDED"
+
+
+@app.post(
+    "/connectors/sync",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def connector_sync(body: ConnectorSyncRequest) -> list[dict[str, Any]]:
+    """Slice 8: Connector sync endpoint returning fixture or live events."""
+    from app.connectors import SeededConnector, LiveConnector, ConnectorNotConfiguredError
+    connector = SeededConnector(body.provider) if body.mode == "SEEDED" else LiveConnector(body.provider)
+    try:
+        return await connector.fetch_latest_events()
+    except ConnectorNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+
 
 
