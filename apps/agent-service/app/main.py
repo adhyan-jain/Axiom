@@ -90,3 +90,25 @@ async def process_event(body: ProcessEventRequest) -> dict[str, Any]:
     classification = await agent.classify_event(body.event)
     return classification.model_dump()
 
+
+class StateProcessRequest(BaseModel):
+    current_state: dict[str, Any]
+    event: dict[str, Any]
+
+
+@app.post(
+    "/state/process",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def process_state_update(body: StateProcessRequest) -> dict[str, Any]:
+    """Slice 4: State Agent endpoint computing deterministic metric deltas and LLM narration."""
+    from app.state_agent import StateAgent
+    agent = StateAgent()
+    new_state = agent.calculate_new_state(body.current_state, body.event)
+    narrative = await agent.narrate_update(body.current_state, new_state, body.event)
+    return {
+        "new_state": new_state,
+        "narrative": narrative.model_dump(),
+    }
+
+

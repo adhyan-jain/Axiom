@@ -29,15 +29,16 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] **Slice 0 — monorepo scaffold + round trip**
 - [x] **Slice 2 — LLM provider abstraction** (`apps/agent-service/app/llm/`)
 - [x] **Slice 1 — Core entities + seed script + Company Pulse page**
-- [x] **Slice 3 — Event system + Observer agent**:
-  - `apps/web/app/api/events/route.ts` & `apps/web/app/api/events/[id]/route.ts`: Next.js internal API endpoints for fetching (`GET`), logging (`POST`), and updating (`PATCH`) events with `X-Axiom-Internal-Secret` protection.
-  - `apps/agent-service/app/observer.py`: `ObserverAgent` implementation that receives incoming event payloads and uses the active LLM provider to return structured `EventClassification` objects (significance, summary, recommended actions, flagged anomalies).
-  - `apps/agent-service/app/main.py`: `POST /observer/process` endpoint exposing the Observer agent.
-  - `apps/agent-service/tests/test_observer.py`: Unit test verifying `ObserverAgent` event classification.
-  - `apps/web/app/events/page.tsx`: "Inbox / Events Stream" UI screen rendering logged events, processing statuses, payloads, and evidence.
+- [x] **Slice 3 — Event system + Observer agent**
+- [x] **Slice 4 — State Agent + deterministic trajectory math**:
+  - `apps/agent-service/app/trajectory.py`: Pure, deterministic functions (`compute_runway`, `compute_burn_delta`, `compute_goal_progress`) adhering strictly to DECISIONS.md (no LLM math).
+  - `apps/agent-service/app/state_agent.py`: `StateAgent` implementation computing exact new metrics and invoking the LLM provider for narrative generation.
+  - `apps/agent-service/app/main.py`: Exposed `POST /state/process` endpoint.
+  - `apps/agent-service/tests/test_trajectory.py` & `tests/test_state_agent.py`: Unit tests for deterministic math and state narration (20 passed).
+  - `apps/web/app/api/state/update/route.ts`: Internal API endpoint for persisting trajectory snapshots, runway snapshots, and updated goal progress to Postgres.
 
 ### In progress
-- [ ] State Agent + deterministic trajectory math (Slice 4)
+- [ ] Authority model + permission gate + audit log (Slice 5)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable
