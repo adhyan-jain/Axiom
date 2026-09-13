@@ -35,14 +35,15 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] **Slice 6 — Strategist + Operator agents, Tasks, and approvals UI**
 - [x] **Slice 7 — Verifier + Memory Agent + Decisions/Memory UI**
 - [x] **Slice 8 — Connectors (seeded) for Gmail/Slack/Calendar/Drive/GitHub**
-- [x] **Slice 9 — Scenario Engine + NL command bar**:
-  - `apps/agent-service/app/scenario_engine.py`: `ScenarioEngine` evaluating counterfactual developer hiring options (Option A: Hire now vs Option B: Wait 3 months post-Nimbus contract) with deterministic runway math.
-  - `apps/agent-service/app/main.py`: Exposed `POST /scenario/evaluate` endpoint.
-  - `apps/agent-service/tests/test_scenario_engine.py`: Unit test suite (28 tests passing).
-  - `apps/web/app/scenarios/page.tsx`: Counterfactual Scenarios UI screen rendering option deltas, LLM recommendation, and trigger conditions.
+- [x] **Slice 9 — Scenario Engine + NL command bar**
+- [x] **Slice 10 — Flagship demo hardening + remaining nav placeholders**:
+  - `apps/web/components/Navigation.tsx` & `apps/web/app/layout.tsx`: Main navigation bar linking Company Pulse, Inbox/Events, Actions & Approvals, Memory & Decisions, Scenarios, Integrations, Audit Log, and Permissions screens.
+  - `apps/web/app/api/demo/run/route.ts` & `apps/web/components/DemoControls.tsx`: Interactive 3-step flagship demo runner executing live multi-agent events (Step 1: Nimbus contract sign → invoice + onboarding tasks; Step 2: AWS cost spike anomaly → memory decision conflict flag; Step 3: Developer hiring counterfactual scenario evaluation).
+  - All 28 agent-service Python pytest unit tests passing.
+  - Next.js production build (`pnpm --filter web build`) passing cleanly across all 18 static & dynamic routes.
 
 ### In progress
-- [ ] Flagship demo hardening + remaining nav placeholders (Slice 10)
+*None — All Slices (0–10) complete and fully verified.*
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable

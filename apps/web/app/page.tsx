@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { checkAgentServiceHealth } from "@/lib/agentServiceClient";
+import DemoControls from "@/components/DemoControls";
 
 export const revalidate = 0;
 
@@ -53,6 +54,9 @@ export default async function HomePage() {
           {health.ok ? `agent-service: ${health.status}` : `agent-service: ${health.error}`}
         </div>
       </div>
+
+      {/* Flagship Demo Controls */}
+      <DemoControls />
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
