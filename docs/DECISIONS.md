@@ -3,6 +3,39 @@
 Append-only. One entry per non-obvious call, newest first. Don't rewrite history; if a
 decision is reversed, add a new entry noting the reversal and why.
 
+## 2026-09-13 — Strands Agents SDK confirmed real; native InterventionHandler API matches the Gate-1 design exactly
+Slice 2 research (installed `strands-agents` 1.55.1 live via `uv add`, then read the
+installed source under `.venv/lib/python3.12/site-packages/strands/`, not just docs):
+`strands-agents` is a genuinely installable, actively-versioned PyPI package (95+ releases,
+latest 1.55.1) with `anthropic`, `boto3`, and `strands-agents-tools` all installing cleanly
+alongside it. It ships a first-class `strands.interventions` module:
+`InterventionHandler` (ABC, subclass + override class-level lifecycle methods —
+`before_invocation`, `before_tool_call`, `after_tool_call`, `before_model_call`,
+`after_model_call`) returning typed decisions from `strands.interventions.actions`
+(`Proceed`, `Deny`, `Guide`, `Confirm`, `Transform`). The method is *literally* named
+`before_tool_call` — not an analogy, Strands' own naming matches the language already used
+in this decision log before the SDK was ever installed. `Deny` sets `event.cancel_tool`
+and short-circuits remaining handlers; the tool never executes and the denial reason is
+delivered to the model as a tool-result error, not a suggestion it can ignore. Handlers
+attach via `Agent(interventions=[...])` (a separate, newer mechanism from the older
+`hooks=[...]`/`HookProvider` observer-only system). `InterventionHandler.on_error`
+(`"throw"` default / `"deny"` / `"proceed"`) controls fail-open vs fail-closed if the
+handler itself throws — Slice 5's permission gate must use `"deny"` or `"throw"`, never
+`"proceed"`, to preserve the "authority never silently lapses" invariant.
+`Agent.structured_output_async(model, prompt)` gives native Pydantic-validated output,
+used the same way across all three providers here.
+What remains genuinely unverified (no AWS credentials in this dev environment): an actual
+live Bedrock model invocation end-to-end. `BedrockModel` construction and `boto3` credential
+resolution were exercised and confirmed not to require network access or raise without
+creds; the network call itself needs verification once AWS credentials exist.
+Why this matters: it means Slice 5's permission gate can be built as real
+`InterventionHandler.before_tool_call` code against a real, stable public API — no
+adapter-guessing or prompt-based workaround needed. See `apps/agent-service/app/llm/
+bedrock_strands.py` for the concrete wiring (including `BedrockStrandsInterventionAdapter`,
+a small bridge so a Slice-5-supplied plain callable can be attached as a class-level
+`InterventionHandler.before_tool_call` override, which Strands' override-detection
+requires).
+
 ## 2026-09-13 — Scope: flagship demo depth over feature breadth
 Full spec (37 sections) is a multi-year product. Building full architecture (data model,
 event system, agent core loop, permissions, audit log) for real, with seeded/demo data,

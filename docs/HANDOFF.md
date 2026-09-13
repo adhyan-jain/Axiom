@@ -15,7 +15,9 @@ Keep entries terse — this is a status board, not a changelog; `git log` is the
 
 ## Current status (2026-09-13)
 
-**Phase: Slice 0 complete.** Monorepo scaffold built and verified end-to-end (see below).
+**Phase: Slice 2 complete** (Slice 1 landing concurrently from a separate agent — check
+its own status in this file's history/commits before assuming apps/web is done). Monorepo
+scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end-to-end.
 
 ### Done
 - [x] Plan approved with user (scope: full architecture + seeded data + flagship demo;
@@ -44,19 +46,70 @@ Keep entries terse — this is a status board, not a changelog; `git log` is the
     far, plus placeholders for `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `AWS_*`).
   - git initialized, first commit made: `feat: scaffold monorepo (slice 0)`.
 
+- [x] **Slice 2 — LLM provider abstraction** (`apps/agent-service/app/llm/`):
+  - `base.py`: `LLMProvider` ABC — `complete(prompt, schema=None, **kwargs) ->
+    CompletionResult` (Pydantic-validated `structured` field, never free-text parsing, per
+    SDD §22), plus `register_before_tool_call()` hook-registration surface for Slice 5.
+  - `mock.py`: `MockProvider` — deterministic (sha256-of-prompt-seeded), zero network calls
+    (test asserts this by breaking `socket.socket` and confirming it still works).
+  - `anthropic_provider.py`: `AnthropicProvider` — real Anthropic Messages API calls;
+    structured output via a forced tool-use call validated back through the Pydantic
+    schema (not regex/substring parsing).
+  - `bedrock_strands.py`: `BedrockStrandsProvider` — real `strands-agents` `Agent` wired to
+    `strands.models.bedrock.BedrockModel`; genuinely inert without AWS creds (construction
+    never raises; `complete()` raises typed `ProviderNotConfiguredError`, verified via
+    both a pytest test and a live `/llm/complete` HTTP call with `LLM_PROVIDER=
+    bedrock_strands` forced and no AWS creds present — got a clean 503, not a crash).
+    Exposes `register_before_tool_call()`, which attaches a real
+    `strands.interventions.InterventionHandler.before_tool_call` override at completion
+    time (via a small `BedrockStrandsInterventionAdapter` bridge — Strands only detects
+    class-level overrides, not instance-assigned callables) — this is the literal
+    attachment point Slice 5's permission gate will use.
+  - `config.py`: `resolve_provider_name()` / `build_provider()` / `get_provider()` — env
+    var `LLM_PROVIDER` wins if set, else auto-detect bedrock_strands (AWS creds present) ->
+    anthropic (`ANTHROPIC_API_KEY` present) -> mock.
+  - `schemas.py`: small named-schema registry (`echo`, `sentiment`) for the debug endpoint.
+  - `POST /llm/complete` on `app/main.py` (internal-secret protected like `/health`):
+    `{prompt, schema_name?, system_prompt?}` -> `{text, structured?, provider, model}`;
+    `ProviderNotConfiguredError` surfaces as HTTP 503 with the typed error message.
+  - Added real deps: `strands-agents`, `strands-agents-tools`, `anthropic`, `boto3` (both
+    `pyproject.toml`/`uv.lock` and the `requirements.txt` fallback).
+  - Tests: `apps/agent-service/tests/test_llm_provider.py` — 15 passed, 2 skipped (the
+    `@pytest.mark.integration` live-Anthropic tests skip cleanly; no `ANTHROPIC_API_KEY` in
+    this environment — see "Environment / secrets" below, this contradicts the Slice-0-era
+    assumption that a key would be present).
+  - **Strands SDK research — materially affects Slice 5's design, see
+    `docs/DECISIONS.md`'s "Strands Agents SDK confirmed real..." entry for full detail**:
+    `strands-agents` (PyPI, 1.55.1 latest) is genuinely installable and ships a first-class
+    `strands.interventions.InterventionHandler` with a literal `before_tool_call` lifecycle
+    method returning typed `Proceed`/`Deny`/`Guide`/`Confirm`/`Transform` decisions — this
+    is real, verified (installed + source read), not inferred from documentation. `Deny`
+    genuinely blocks tool execution and short-circuits remaining handlers.
+    `on_error="deny"` should be Slice 5's default (fail-closed) for the permission gate.
+    The one unverified piece: an actual live Bedrock model invocation over the network —
+    no AWS credentials exist in this dev environment yet, so only construction/credential-
+    detection was exercised, not the real API round trip.
+
 ### In progress
-- [ ] Prisma schema (Company Brain data model) — Slice 1
+- [ ] Prisma schema (Company Brain data model) — Slice 1 (separate concurrent agent; check
+      its own commits/status rather than assuming done)
 - [ ] Seed script + Company Pulse page — Slice 1
-- [ ] Agent-service: LLM provider abstraction, connectors, agents, permission gate —
-      Slices 2+
+- [ ] Connectors, agents, permission gate — Slices 3+ (LLM layer they'll sit on is done)
 - [ ] Remaining UI screens (10 listed in SDD §7)
 
 ### Next up
-**Slice 1** (see `docs/SLICES.md` for full description): Prisma schema in `apps/web`
-covering the core Company Brain entities from SDD §4, wire `DATABASE_URL` to the
-docker-compose Postgres, a seed script for the demo org (founder, customers, ₹10L ARR goal,
-₹2.4L ARR/cash/burn current state), and turn the Slice 0 health page into a real "Company
-Pulse" page reading seeded state.
+**Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable
+via a Next.js internal API endpoint (depends on Slice 1's Prisma schema landing). Seed/cron
+script pushes synthetic events. Observer agent (agent-service) reads new events, classifies
+significance via `app/llm/get_provider()` (now built), writes results back through Next.js's
+API. Inbox/Events UI screen lists events with classification.
+
+Slice 5 (permission gate) implementers: read `bedrock_strands.py`'s module docstring and
+the DECISIONS.md entry above first — the `before_tool_call` intervention wiring pattern is
+already established there; Slice 5 mainly needs to build the actual policy-table-backed
+callback and pass it to `register_before_tool_call()`, plus mirror the same enforcement
+point for whichever provider ends up live (mock/anthropic have no tool loop to intervene on
+— only bedrock_strands genuinely drives one via Strands' `Agent`).
 
 ### Verification status (Slice 0, this session)
 Verified:
@@ -102,11 +155,20 @@ Not verified / worth double-checking next session:
 
 ## Environment / secrets
 
-- `ANTHROPIC_API_KEY` — assumed available in this dev environment for the `anthropic`
-  LLM provider path.
+- `ANTHROPIC_API_KEY` — **correction from Slice 0's assumption**: as of Slice 2, this key
+  is NOT actually present in this dev environment (checked shell env and every `.env`
+  location; none found). The `anthropic` provider is fully implemented and will work the
+  moment a real key is set — no code changes needed — but it has only been verified
+  structurally (`ProviderNotConfiguredError` path) here, not against a live response.
+  `@pytest.mark.integration` tests in `test_llm_provider.py` will start actually running
+  (rather than skipping) the moment the key exists.
 - AWS credentials — **not yet provided**. `bedrock_strands` provider is fully implemented
   but inert until `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (or a profile) + `AWS_REGION`
-  are set. No code changes should be needed when the user adds them — verify this stays
-  true as the provider is built.
+  are set. Verified in Slice 2: importing/instantiating the provider and calling
+  `register_before_tool_call()` never raises without creds; `complete()` raises typed
+  `ProviderNotConfiguredError` (also verified live through `POST /llm/complete` with
+  `LLM_PROVIDER=bedrock_strands` forced — clean HTTP 503, not a crash). No code changes
+  should be needed when the user adds AWS creds — only the actual network round trip to
+  Bedrock remains unverified in this environment.
 - No OAuth client IDs/secrets configured for Gmail/Slack/Calendar/Drive/GitHub — live
   connectors are stubs by design.
