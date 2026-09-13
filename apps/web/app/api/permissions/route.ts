@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { PermissionLevel } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { checkInternalAuth } from "@/lib/internalAuth";
+import { errorMessage } from "@/lib/errors";
+
+const VALID_LEVELS = new Set(Object.values(PermissionLevel));
 
 export async function GET(request: Request) {
   if (!checkInternalAuth(request)) {
@@ -20,6 +24,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { orgId, actionType, level } = body;
 
+    if (typeof actionType !== "string" || !actionType) {
+      return NextResponse.json({ error: "actionType is required" }, { status: 400 });
+    }
+    if (!VALID_LEVELS.has(level)) {
+      return NextResponse.json(
+        { error: `level must be one of: ${[...VALID_LEVELS].join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     let targetOrgId = orgId;
     if (!targetOrgId) {
       const defaultOrg = await prisma.organization.findFirst();
@@ -36,7 +50,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(permission);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 400 });
   }
 }
