@@ -112,3 +112,38 @@ async def process_state_update(body: StateProcessRequest) -> dict[str, Any]:
     }
 
 
+class StrategistRequest(BaseModel):
+    goal_data: dict[str, Any]
+    financial_state: dict[str, Any]
+
+
+@app.post(
+    "/strategist/analyze",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def strategist_analyze(body: StrategistRequest) -> dict[str, Any]:
+    """Slice 6: Strategist agent endpoint analyzing goals vs trajectory."""
+    from app.strategist_operator import StrategistAgent
+    agent = StrategistAgent()
+    res = await agent.analyze_trajectory(body.goal_data, body.financial_state)
+    return res.model_dump()
+
+
+class OperatorRequest(BaseModel):
+    bottleneck: dict[str, Any]
+    policy_table: dict[str, str] = Field(default_factory=dict)
+
+
+@app.post(
+    "/operator/propose",
+    dependencies=[Depends(require_internal_secret)],
+)
+async def operator_propose(body: OperatorRequest) -> list[dict[str, Any]]:
+    """Slice 6: Operator agent endpoint proposing gated actions."""
+    from app.strategist_operator import OperatorAgent, BottleneckAnalysis
+    agent = OperatorAgent()
+    bottleneck_obj = BottleneckAnalysis(**body.bottleneck)
+    return await agent.propose_actions(bottleneck_obj, body.policy_table)
+
+
+

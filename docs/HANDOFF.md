@@ -31,16 +31,16 @@ scaffold (Slice 0) and LLM provider abstraction (Slice 2) built and verified end
 - [x] **Slice 1 — Core entities + seed script + Company Pulse page**
 - [x] **Slice 3 — Event system + Observer agent**
 - [x] **Slice 4 — State Agent + deterministic trajectory math**
-- [x] **Slice 5 — Authority model + permission gate + audit log**:
-  - `apps/agent-service/app/permission_gate.py`: `check_permission` function evaluating org policy table hierarchy (`READ`, `DRAFT`, `RECOMMEND`, `EXECUTE`, `REQUIRE_APPROVAL`).
-  - `apps/agent-service/tests/test_permission_gate.py`: Unit tests verifying permission evaluations.
-  - `apps/web/app/api/audit/route.ts`: API endpoints for fetching (`GET`) and writing (`POST`) `AuditLogEntry` records.
-  - `apps/web/app/api/permissions/route.ts`: API endpoints for managing org policy settings.
-  - `apps/web/app/audit/page.tsx`: Agent Activity & Audit Log UI page.
-  - `apps/web/app/settings/permissions/page.tsx`: Settings / Permissions configuration UI page.
+- [x] **Slice 5 — Authority model + permission gate + audit log**
+- [x] **Slice 6 — Strategist + Operator agents, Tasks, and approvals UI**:
+  - `apps/agent-service/app/strategist_operator.py`: `StrategistAgent` (trajectory/bottleneck analysis) and `OperatorAgent` (gated task/action proposals).
+  - `apps/agent-service/app/main.py`: Exposed `POST /strategist/analyze` and `POST /operator/propose` endpoints.
+  - `apps/agent-service/tests/test_strategist_operator.py`: Unit test suite (23 tests passing).
+  - `apps/web/app/api/actions/route.ts`: API endpoints for fetching and creating tasks or approval requests.
+  - `apps/web/app/actions/page.tsx`: Proactive Actions & Approvals UI screen showing pending approval requests and task queue.
 
 ### In progress
-- [ ] Strategist + Operator agents, Tasks, and approvals UI (Slice 6)
+- [ ] Verifier + Memory Agent + Decisions/Memory UI (Slice 7)
 
 ### Next up
 **Slice 3** (see `docs/SLICES.md`): Event system + Observer agent. `Event` table writable
