@@ -1,0 +1,36 @@
+# Node
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+pnpm-lock.yaml.bak
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+uv.lock.bak
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Misc
+.turbo/
+coverage/

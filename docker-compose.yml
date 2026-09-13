@@ -1,0 +1,29 @@
+version: "3.9"
+
+# Slice 0: Postgres + Redis are available but not yet wired into the apps.
+# apps/web will own the Postgres schema (Prisma) starting Slice 1.
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: axiom
+      POSTGRES_PASSWORD: axiom
+      POSTGRES_DB: axiom
+    ports:
+      - "5432:5432"
+    volumes:
+      - axiom_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - axiom_redis_data:/data
+
+volumes:
+  axiom_postgres_data:
+  axiom_redis_data:

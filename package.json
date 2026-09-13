@@ -1,0 +1,14 @@
+{
+  "name": "axiom",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "typecheck": "pnpm --filter web typecheck",
+    "lint": "pnpm --filter web lint",
+    "agent-service:dev": "cd apps/agent-service && ./run.sh"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "devDependencies": {}
+}
