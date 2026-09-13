@@ -139,6 +139,73 @@ fail-closed. This entry documents what actually got wired, verified live, end to
 
 
 
+## 2026-09-14 — Redesign phases 1-7 complete (Events/Actions/Decisions/Audit/Scenarios/Integrations/Permissions)
+
+Branch: `axiom-redesign-continue` in worktree `agent-a0175b9124e417639`, based on
+`worktree-agent-af4e828fbb40bfe0f`'s commit `0394810` (design system + Home rebuild).
+Commits `4749e06`..`a40c1dc`, one per phase, each verified with
+`pnpm typecheck && pnpm lint && pnpm build` before committing.
+
+**Done** (matches the redesign brief's phases 1-7, in priority order):
+1. Events (`app/events/page.tsx`) rebuilt as a signal stream: SIGNAL -> INTERPRETATION ->
+   CONSEQUENCE -> RESPONSE -> VERIFICATION via `CausalChain`. Full CRUD
+   (`app/events/actions.ts`: create/update/delete Server Actions alongside the existing
+   `processEventAction`).
+2. Actions (`app/actions/page.tsx`) uses `AuthorityBadge`/`AgentState` instead of badge
+   soup; pending approvals show WHY via `CausalChain` with "Approve recommendation" /
+   "Investigate assumptions" (disclosure of the raw tool invocation) as the primary/
+   secondary actions, extending the existing approve/reject Server Action.
+3. Decisions (`app/decisions/page.tsx`) — added `evidence`/`consequences`/
+   `relatedEventIds` fields to the `Decision` model (migration
+   `20260913221821_decision_evidence_consequences_related_events`). Full CRUD
+   (`app/decisions/actions.ts`); archive = `SUPERSEDED` status, never a hard delete.
+   Conflicts render via `CausalChain` (old decision -> new signal -> conflict ->
+   recommendation).
+4. Audit (`app/audit/page.tsx`) rebuilt as a connected timeline (rail + node), evidence
+   as first-class chips, permission level + outcome as distinguishable `AuthorityBadge`s.
+5. Scenarios (`app/scenarios/page.tsx`) rebuilt as today -> option A vs B branch
+   comparison, `TrajectoryLine` per option (repurposed on a runway-months axis) +
+   `CausalChain` for the recommendation/trigger condition.
+6. Integrations (`app/integrations/page.tsx`) — real OAuth: connect route
+   (`app/api/integrations/[provider]/connect/route.ts`) generates CSRF state, redirects to
+   the real Slack/Google auth URL; callback route
+   (`app/api/integrations/[provider]/callback/route.ts`) validates state, exchanges the
+   code server-side, encrypts tokens at rest (`lib/integrationCrypto.ts`, AES-256-GCM,
+   key from `INTEGRATION_TOKEN_KEY`) and upserts `Integration` (new fields via migration
+   `20260913222517_integration_oauth_tokens`). Missing `SLACK_CLIENT_ID`/`SECRET` or
+   `GOOGLE_CLIENT_ID`/`SECRET` redirects back with a clear "not configured" error state —
+   **verified live**: `curl -o /dev/null -w '%{http_code} %{redirect_url}'
+   http://localhost:3211/api/integrations/slack/connect` (no `SLACK_CLIENT_ID` set) 307s to
+   `/integrations?error=not_configured&provider=slack&missing=SLACK_CLIENT_ID`, and the
+   page rendered that state. Disconnect is a Server Action (`app/integrations/actions.ts`).
+   Added webhook/sync stubs: `app/api/integrations/slack/events/route.ts` (handles Slack's
+   `url_verification` handshake, writes a real `Event`) and
+   `app/api/integrations/google/webhook/route.ts` (Pub/Sub push stub).
+7. Settings/Permissions (`app/settings/permissions/page.tsx`) — real create/update/remove
+   UI (`app/settings/permissions/actions.ts`), mirroring the existing internal API route's
+   upsert-by-`orgId`+`actionType` semantics but same-origin (no internal secret needed).
+
+**Not done**: phase 8 (command bar / "Ask Axiom" query surface) — explicitly lowest
+priority in the brief ("only if time remains"), not started.
+
+**Also fixed en route**: `prisma/migrations/20260913153418_init/migration.sql` had an
+errant CLI warning banner captured into the SQL file (`syntax error at "warn"`), which
+blocked `prisma migrate dev`. Removed the banner and reconciled the recorded checksum in
+the dev DB's `_prisma_migrations` table so migration history stays consistent.
+
+**Verification**: `pnpm typecheck && pnpm lint && pnpm build` clean after every commit
+above (final full-suite rerun also clean). Both new Prisma migrations applied against
+the live shared dev Postgres (`localhost:5433`, same DB the other worktrees/seed data
+use) via `prisma migrate dev` — spot-checked the `Decision` table's new columns via
+`psql` after applying.
+
+**Not verified**: the OAuth flow's full happy path end-to-end (no real
+`SLACK_CLIENT_ID`/`GOOGLE_CLIENT_ID` supplied in this environment, per the task's own
+constraint) — only the graceful-failure path was exercised live. Token
+encryption/decryption round-trip (`lib/integrationCrypto.ts`) was not exercised with a
+live token since no token was ever obtained; the code path is symmetric and simple
+enough to review directly.
+
 **Read this first when resuming work in a new session.** Update it at the end of every
 work session (or when context is about to run out) so the next agent can pick up cold.
 Keep entries terse — this is a status board, not a changelog; `git log` is the changelog.
