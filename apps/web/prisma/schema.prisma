@@ -523,13 +523,16 @@ enum DecisionStatus {
 }
 
 model Decision {
-  id         String         @id @default(cuid())
-  orgId      String
-  title      String
-  reason     String
-  date       DateTime       @default(now())
-  reviewDate DateTime?
-  status     DecisionStatus @default(ACTIVE)
+  id           String         @id @default(cuid())
+  orgId        String
+  title        String
+  reason       String // rationale
+  evidence     Json           @default("[]") // JSON array of evidence refs supporting the decision
+  consequences String? // what this decision commits the org to / what changes because of it
+  relatedEventIds Json        @default("[]") // JSON array of Event ids this decision was made in response to
+  date         DateTime       @default(now())
+  reviewDate   DateTime?
+  status       DecisionStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
