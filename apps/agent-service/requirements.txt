@@ -2,3 +2,12 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.8.0
 pydantic-settings>=2.4.0
+strands-agents>=1.55.1
+strands-agents-tools>=0.8.8
+anthropic>=1.5.0
+boto3>=1.43.93
+
+# dev/test (see pyproject.toml [dependency-groups.dev] for the canonical uv-managed list)
+httpx>=0.28.1
+pytest>=9.1.1
+pytest-asyncio>=1.4.0

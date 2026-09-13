@@ -8,6 +8,10 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.8.0",
     "pydantic-settings>=2.4.0",
+    "strands-agents>=1.55.1",
+    "strands-agents-tools>=0.8.8",
+    "anthropic>=1.5.0",
+    "boto3>=1.43.93",
 ]
 
 [build-system]
@@ -16,3 +20,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+    "integration: real external API call (e.g. live Anthropic request); skips gracefully if credentials are absent.",
+]
