@@ -34,3 +34,8 @@ uv.lock.bak
 # Misc
 .turbo/
 coverage/
+
+# Claude Code agent worktrees / debug artifacts
+.claude/worktrees/
+.playwright-mcp/
+*.png
