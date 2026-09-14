@@ -1,84 +1,77 @@
 import { prisma } from "@/lib/prisma";
-import ProcessEventButton from "@/components/ProcessEventButton";
+import { Surface } from "@/components/primitives";
+import EventCard from "@/components/EventCard";
+import EventLogger from "@/components/EventLogger";
 
 export const revalidate = 0;
 
 export default async function EventsPage() {
-  const events = await prisma.event.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  const [events, tasks, approvals] = await Promise.all([
+    prisma.event.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.task.findMany(),
+    prisma.approvalRequest.findMany(),
+  ]);
+
+  // Tasks/approvals aren't FK-linked to Event in the schema (see docs/DECISIONS.md —
+  // Task.source is a freeform string like "event:<id>" or "operator_agent"). Match on that
+  // convention to surface the RESPONSE stage without a schema migration.
+  const taskBySource = new Map(tasks.map((t) => [t.source, t]));
+  const approvalByEventId = new Map<string, (typeof approvals)[number]>();
+  for (const approval of approvals) {
+    const inv = approval.toolInvocation as Record<string, unknown> | null;
+    const eventId = inv && typeof inv === "object" ? (inv["eventId"] as string | undefined) : undefined;
+    if (eventId) approvalByEventId.set(eventId, approval);
+  }
+
+  const unprocessedCount = events.filter((e) => !e.processed).length;
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 space-y-6">
-      <div className="flex items-center justify-between border-b pb-6">
+    <main className="mx-auto min-h-screen max-w-5xl space-y-8 px-6 py-10">
+      <div className="flex flex-col gap-3 border-b border-hairline pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Inbox / Events Stream
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Real-time event stream processed by Observer Agent
+          <h1 className="display-heading text-display-lg text-ink-primary">Signal stream</h1>
+          <p className="mt-1 text-body-sm text-ink-secondary">
+            Every observed change, what Axiom thinks it means, what it caused, and what happened next
           </p>
         </div>
+        <span className="text-body-sm font-num text-ink-secondary">
+          {unprocessedCount} awaiting interpretation
+        </span>
       </div>
+
+      <Surface tier={1} className="p-5">
+        <h2 className="mb-3 display-heading text-display-sm text-ink-primary">Log an event</h2>
+        <EventLogger />
+      </Surface>
 
       <div className="space-y-4">
         {events.length === 0 ? (
-          <div className="p-8 text-center border rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-500">
+          <Surface tier={1} className="p-8 text-center text-body-sm text-ink-faint">
             No events logged yet.
-          </div>
+          </Surface>
         ) : (
           events.map((event) => (
-            <div
+            <EventCard
               key={event.id}
-              className="p-5 border rounded-xl bg-card text-card-foreground shadow-sm space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-base text-slate-900 dark:text-slate-100">
-                    {event.entityType} Event
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded border bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono">
-                    {event.source}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                      event.processed
-                        ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-                        : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                    }`}
-                  >
-                    {event.processed ? "Processed by Observer" : "Pending Processing"}
-                  </span>
-                  {!event.processed && <ProcessEventButton eventId={event.id} />}
-                </div>
-              </div>
-
-              {event.newState && (
-                <div className="text-sm bg-slate-50 dark:bg-slate-900 p-3 rounded-lg font-mono text-slate-700 dark:text-slate-300 overflow-x-auto">
-                  <span className="text-xs text-slate-400 block mb-1">New State Payload:</span>
-                  {JSON.stringify(event.newState, null, 2)}
-                </div>
-              )}
-
-              {Array.isArray(event.evidence) && event.evidence.length > 0 && (
-                <div className="text-xs text-slate-500 space-y-1">
-                  <span className="font-semibold block">Evidence:</span>
-                  <ul className="list-disc list-inside space-y-0.5">
-                    {event.evidence.map((item: any, idx: number) => (
-                      <li key={idx}>{typeof item === "string" ? item : JSON.stringify(item)}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="text-xs text-slate-400 flex items-center justify-between pt-2 border-t">
-                <span>Confidence: {(event.confidence * 100).toFixed(0)}%</span>
-                <span>Logged at: {new Date(event.createdAt).toLocaleString()}</span>
-              </div>
-            </div>
+              event={{ ...event, evidence: event.evidence, newState: event.newState }}
+              relatedTask={
+                taskBySource.get(`event:${event.id}`)
+                  ? {
+                      title: taskBySource.get(`event:${event.id}`)!.title,
+                      why: taskBySource.get(`event:${event.id}`)!.why,
+                      status: taskBySource.get(`event:${event.id}`)!.status,
+                    }
+                  : null
+              }
+              relatedApproval={
+                approvalByEventId.get(event.id)
+                  ? {
+                      reason: approvalByEventId.get(event.id)!.reason,
+                      status: approvalByEventId.get(event.id)!.status,
+                    }
+                  : null
+              }
+            />
           ))
         )}
       </div>

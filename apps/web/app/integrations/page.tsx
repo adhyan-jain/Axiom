@@ -1,56 +1,115 @@
 import { prisma } from "@/lib/prisma";
+import { Surface, AuthorityBadge } from "@/components/primitives";
+import IntegrationCard from "@/components/IntegrationCard";
+import { OAUTH_PROVIDERS, type OAuthSlug } from "@/lib/oauthProviders";
+import { IntegrationProvider } from "@prisma/client";
 
 export const revalidate = 0;
 
-export default async function IntegrationsPage() {
-  const integrations = await prisma.integration.findMany({
-    orderBy: { provider: "asc" },
-  });
+const ERROR_MESSAGES: Record<string, string> = {
+  unknown_provider: "Unknown integration provider.",
+  not_configured: "Integration not configured — missing credentials.",
+  state_mismatch: "OAuth security check failed (state mismatch) — please try connecting again.",
+  no_access_token_returned: "The provider did not return an access token.",
+  no_organization: "No organization found to attach this integration to.",
+};
+
+function describeError(code: string | null): string | null {
+  if (!code) return null;
+  const [key, detail] = code.split(":");
+  const base = ERROR_MESSAGES[key] ?? `Connection failed: ${code}`;
+  return detail ? `${base} (${detail})` : base;
+}
+
+export default async function IntegrationsPage({
+  searchParams,
+}: {
+  searchParams: { error?: string; provider?: string; connected?: string; missing?: string };
+}) {
+  const [integrations, org] = await Promise.all([
+    prisma.integration.findMany({ orderBy: { provider: "asc" } }),
+    prisma.organization.findFirst(),
+  ]);
+
+  const byProvider = new Map(integrations.map((i) => [i.provider, i]));
+  const errorText = describeError(searchParams.error ?? null);
+
+  const oauthSlugs = Object.keys(OAUTH_PROVIDERS) as OAuthSlug[];
+  const github = byProvider.get(IntegrationProvider.GITHUB);
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-10 space-y-6">
-      <div className="flex items-center justify-between border-b pb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            Integrations & Connectors
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Seeded data sources and live integration connectors (Gmail, Slack, Calendar, Drive, GitHub)
-          </p>
-        </div>
+    <main className="mx-auto min-h-screen max-w-5xl space-y-8 px-6 py-10">
+      <div className="border-b border-hairline pb-6">
+        <h1 className="display-heading text-display-lg text-ink-primary">Integrations</h1>
+        <p className="mt-1 text-body-sm text-ink-secondary">
+          Real OAuth connect/disconnect for Slack and Google (Gmail, Calendar, Drive).
+          Seeded fixture data powers the demo until real credentials are supplied.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {integrations.map((item) => (
-          <div key={item.id} className="p-6 border rounded-xl bg-card text-card-foreground shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-lg text-slate-900 dark:text-slate-100 font-mono">
-                {item.provider}
-              </span>
-              <span
-                className={`text-xs px-2.5 py-1 rounded-full font-mono font-semibold ${
-                  item.mode === "SEEDED"
-                    ? "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20"
-                    : "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-                }`}
-              >
-                {item.mode} MODE
-              </span>
-            </div>
+      {searchParams.connected && (
+        <Surface tier={1} className="border-trajectory-positive/40 p-4 text-body-sm text-trajectory-positive">
+          Connected {searchParams.connected} successfully.
+        </Surface>
+      )}
+      {errorText && (
+        <Surface tier={1} className="border-signal-risk/40 p-4 text-body-sm text-signal-risk">
+          {errorText}
+        </Surface>
+      )}
 
-            <div className="text-xs text-slate-500 space-y-1">
-              <div className="flex justify-between">
-                <span>Status:</span>
-                <span className="font-medium text-emerald-600 dark:text-emerald-400">{item.status}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Last Synced:</span>
-                <span>{item.lastSyncAt ? new Date(item.lastSyncAt).toLocaleString() : "N/A"}</span>
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {oauthSlugs.map((slug) => {
+          const config = OAUTH_PROVIDERS[slug];
+          const integration = byProvider.get(config.dbProvider) ?? null;
+          const clientIdSet = Boolean(process.env[config.clientIdEnv]);
+          const clientSecretSet = Boolean(process.env[config.clientSecretEnv]);
+          const configured = clientIdSet && clientSecretSet;
+          return (
+            <IntegrationCard
+              key={slug}
+              slug={slug}
+              displayName={config.displayName}
+              configured={configured}
+              missingEnvVar={!clientIdSet ? config.clientIdEnv : config.clientSecretEnv}
+              integration={
+                integration
+                  ? {
+                      id: integration.id,
+                      provider: integration.provider,
+                      mode: integration.mode,
+                      status: integration.status,
+                      lastSyncAt: integration.lastSyncAt,
+                      externalAccountId: integration.externalAccountId,
+                      lastError: integration.lastError,
+                    }
+                  : null
+              }
+            />
+          );
+        })}
       </div>
+
+      {github && (
+        <section className="space-y-3">
+          <h2 className="display-heading text-display-sm text-ink-primary">Other connectors</h2>
+          <Surface tier={1} className="flex items-center justify-between p-5">
+            <div>
+              <h3 className="text-body-lg font-medium text-ink-primary">GitHub</h3>
+              <p className="text-body-sm text-ink-secondary">
+                Seeded fixture data — no OAuth flow wired for this pass, per docs/SDD.md §2.
+              </p>
+            </div>
+            <AuthorityBadge state="observed" />
+          </Surface>
+        </section>
+      )}
+
+      {!org && (
+        <Surface tier={1} className="p-4 text-body-sm text-signal-risk">
+          No organization found — run the seed script before connecting integrations.
+        </Surface>
+      )}
     </main>
   );
 }

@@ -523,13 +523,16 @@ enum DecisionStatus {
 }
 
 model Decision {
-  id         String         @id @default(cuid())
-  orgId      String
-  title      String
-  reason     String
-  date       DateTime       @default(now())
-  reviewDate DateTime?
-  status     DecisionStatus @default(ACTIVE)
+  id           String         @id @default(cuid())
+  orgId        String
+  title        String
+  reason       String // rationale
+  evidence     Json           @default("[]") // JSON array of evidence refs supporting the decision
+  consequences String? // what this decision commits the org to / what changes because of it
+  relatedEventIds Json        @default("[]") // JSON array of Event ids this decision was made in response to
+  date         DateTime       @default(now())
+  reviewDate   DateTime?
+  status       DecisionStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -650,6 +653,17 @@ model Integration {
   mode      IntegrationMode     @default(SEEDED)
   status    IntegrationStatus   @default(CONNECTED)
   lastSyncAt DateTime?
+
+  // Live OAuth (Slice: real OAuth flow). Tokens are encrypted at rest (AES-256-GCM,
+  // key from INTEGRATION_TOKEN_KEY env var — see lib/integrationCrypto.ts) — never stored
+  // or logged in plaintext. Null until a real Connect flow completes; a SEEDED-mode row
+  // never populates these.
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+  scope           String?
+  externalAccountId String?
+  lastError       String? // last OAuth/callback failure reason, surfaced in the UI
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
